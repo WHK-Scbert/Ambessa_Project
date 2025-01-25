@@ -9,6 +9,7 @@ from pentestgpt.config.chat_config import ChatGPTConfig
 from prompts.prompt_class_v2 import PentestGPTPrompt  # Import the prompt class
 from pentestgpt.utils.APIs.module_import import dynamic_import
 import re
+import multiprocessing
 
 def command_select(input_list):
     """
@@ -206,12 +207,32 @@ class SimplifiedPentestGPT:
     
     
 
+    def execute_bruteforce(self, command):
+        """
+        Function to execute a brute force command in a separate process.
+        """
+        try:
+            print(f"Executing brute force command: {command}")
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+            stdout, stderr = process.communicate()
+            return stdout, stderr
+        except Exception as e:
+            return None, str(e)
+
+
+    def is_bruteforce_command(self, command):
+        """
+        Check if a command is a brute force command.
+        """
+        brute_keywords = ["hydra", "medusa", "brute", "bruteforce"]
+        return any(keyword in command for keyword in brute_keywords)
+
+
     def start_conversation(self):
         """
         Start the penetration testing conversation loop.
         """
-
-        # Initial prompt to GPT using the task_description and the target details
         initial_prompt = (
             f"{self.prompts.task_description}\n\n"
             f"Target IP: {self.target_ip}\n"
@@ -219,65 +240,68 @@ class SimplifiedPentestGPT:
             f"{self.prompts.first_todo}"
         )
         response = self.send_to_gpt(initial_prompt)
+        brute_process = None  # To track the brute force process
+        brute_result = None   # To store brute force results
 
         while True:
             try:
-                # Extract commands from GPT's response (supports both ` ` and ``` ```)
+                # Extract commands from GPT's response
                 commands = re.findall(r'```(.*?)```|`([^`]*)`', response, re.DOTALL)
-                commands = [cmd[0] or cmd[1] for cmd in commands]  # Extract matched groups
+                commands = [cmd[0] or cmd[1] for cmd in commands]
+
                 if not commands:
                     self.console.print("No valid command found in response. Asking GPT for suggestions.", style="bold yellow")
-
-                    # Ask GPT for command suggestions
-                    suggestion_prompt = (
-                        #f"{self.prompts.no_valid_command}\n"
-                        f"Response received:\n{response}\n"
-                        f"Please suggest useful commands for this situation."
-                    )
+                    suggestion_prompt = f"Response received:\n{response}\nPlease suggest useful commands for this situation."
                     response = self.send_to_gpt(suggestion_prompt)
-                    continue  # Retry with the new GPT response
+                    continue
 
-                # Select the first valid command
                 command = commands[0].strip()
-
-                # Ensure command is not empty
                 if not command:
                     self.console.print("Empty command found. Asking GPT for suggestions.", style="bold yellow")
-
-                    # Ask GPT for command suggestions
-                    suggestion_prompt = (
-                        f"{self.prompts.no_valid_command}\n"
-                        f"Response received:\n{response}\n"
-                        f"Please suggest useful commands for this situation."
-                    )
+                    suggestion_prompt = f"Response received:\n{response}\nPlease suggest useful commands for this situation."
                     response = self.send_to_gpt(suggestion_prompt)
-                    continue  # Retry with the new GPT response
+                    continue
 
                 command = self.validate_command(command)
 
+                if self.is_bruteforce_command(command):
+                    # Handle brute force command in a separate process
+                    self.console.print(f"Brute force command detected: {command}. Running in a separate process.", style="bold yellow")
+                    brute_process = multiprocessing.Process(target=self.execute_bruteforce, args=(command.split(),))
+                    brute_process.start()
+
+                    # Inform GPT about the running brute force and ask for another command
+                    response = self.send_to_gpt("A brute force task is running. Please suggest another command to execute.")
+                    continue
+
+                if brute_process and brute_process.is_alive():
+                    self.console.print("Brute force process is still running.", style="bold blue")
+
+                elif brute_process and not brute_process.is_alive():
+                    if brute_result is None:  # Fetch result only once
+                        brute_stdout, brute_stderr = self.execute_bruteforce(command.split())
+                        brute_result = f"Brute force completed. Output:\n{brute_stdout}\nError:\n{brute_stderr}"
+                        self.console.print(brute_result, style="bold green")
+
                 print("Command is:", command)
 
-                # Check for user exit input
                 user_input = input()
                 if command.lower() in ["exit", "quit", "stop"] or user_input in ["exit", "quit", "stop"]:
                     self.console.print("Conversation ended by user.", style="bold red")
                     break
 
-                # Execute the command and get results
                 output, error = self.execute_command(command.split())
                 if output:
                     self.console.print(f"Command Output: {output}", style="bold green")
                 if error:
                     self.console.print(f"Command Error: {error}", style="bold red")
 
-                # Prepare results to send back to GPT using the process_results prompt
                 result_summary = (
                     f"{self.prompts.process_results}\n"
                     f"Command: `{command}`\n"
                     f"Output:\n{output or 'No output.'}\n"
                     f"Error:\n{error or 'No error.'}\n"
                 )
-                # Send results back to GPT
                 response = self.send_to_gpt(result_summary)
 
             except KeyboardInterrupt:
