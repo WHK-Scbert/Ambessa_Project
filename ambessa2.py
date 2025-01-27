@@ -142,7 +142,7 @@ class SimplifiedPentestGPT:
     def validate_command(self, command: list[str]) -> list[str]:
         """
         Validate a command (as a list) to ensure it includes necessary flags to prevent indefinite execution.
-        Adjusts commands like 'ping', 'tail', 'yes', and 'watch' to ensure safety.
+        Adjusts commands like 'ping', 'tail', 'yes', 'watch', and 'nmap' to ensure safety.
 
         Args:
             command (list[str]): The command and its arguments as a list.
@@ -202,6 +202,13 @@ class SimplifiedPentestGPT:
                 # Add '-n 2' (2-second interval) if it's missing
                 command.insert(1, '-n')
                 command.insert(2, '2')
+
+        elif command[0] == "nmap":
+            # Check if there's a .txt result file with 'nmap' in its name in the current directory
+            result_files = [f for f in os.listdir('.') if f.endswith('.txt') and 'nmap' in f]
+            if result_files:
+                # Change command to 'cat <first_result_file>'
+                command = ["cat", result_files[0]]
 
         return command
     
