@@ -11,7 +11,7 @@ export default function CyberApp() {
   const [status, setStatus] = useState("Idle");
 
   useEffect(() => {
-    const socket = io("http://192.168.5.107:5000");
+    const socket = io("http://localhost:5500");
 
     // Listen for the first command's output
     socket.on("output_1", (data) => {
@@ -33,7 +33,7 @@ export default function CyberApp() {
     setOutput1("");
     setOutput2("");
 
-    const response = await fetch("http://192.168.5.107:5000/api/scan", {
+    const response = await fetch("http://localhost:5500/api/scan", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -1,13 +1,13 @@
 from flask import Flask, request
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
-import io
-from contextlib import redirect_stdout
+import subprocess
 import threading
 
-# Your custom imports
-import openai  # if needed
-import os      # if needed
+import io
+from contextlib import redirect_stdout
+
+# === MallanooSploit / PentestGPT imports ===
 from prompts.prompt_class import PentestGPTPrompt
 from mallanoo_sploit import MallanooSploit
 
@@ -15,71 +15,79 @@ app = Flask(__name__)
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# Load prompts, if needed
-prompts = PentestGPTPrompt()
-
-# Keep track of some session details if you want
+# Session or state data if needed
 sessions = {
     "initialized": False,
-    "target_ip": None,
-    "reasoning_session": None,
-    "generation_session": None,
 }
 
-def run_pentest(target_ip, target_description):
+def run_shell_command(command, command_id):
     """
-    Runs a penetration test and prints output. The printed output will be
-    captured and streamed to the client via Socket.IO.
+    Executes a shell command in a subprocess and emits each line of stdout to the client.
     """
-    print(f"Running pentest on IP: {target_ip}")
-    print(f"Description: {target_description}")
+    try:
+        process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        for line in iter(process.stdout.readline, b""):
+            socketio.emit(f"output_{command_id}", {"data": line.decode("utf-8")})
+    except Exception as e:
+        socketio.emit(f"output_{command_id}", {"data": f"Error running command: {str(e)}"})
 
-    if not target_ip:
-        print("No target IP provided.")
-        return  # We'll just print an error and stop.
 
-    # Initialize only once (optional logic, if you prefer)
-    if not sessions["initialized"]:
-        sessions["initialized"] = True
-        pentest_handler = MallanooSploit(
-            target_ip=target_ip,
-            target_description=target_description,
-        )
-        # start_conversation() presumably prints or logs info
-        pentest_handler.start_conversation()
-
-@app.route("/api/pentest", methods=["POST"])
-def pentest_route():
+def run_mallanoo_sploit(target_ip, command_id, description=""):
     """
-    API endpoint to start a pentest and stream its output in real time
-    via Socket.IO events called 'pentest_output'.
+    Runs MallanooSploit (PentestGPT) logic in Python, captures stdout, and emits each line to the client.
+    """
+    try:
+        # Use StringIO to capture all prints from MallanooSploit
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            # Print a quick header so we know it started
+            print(f"=== Starting MallanooSploit on {target_ip} ===")
+
+            if not sessions["initialized"]:
+                sessions["initialized"] = True
+
+            # Create a MallanooSploit instance
+            pentest_handler = MallanooSploit(
+                target_ip=target_ip,
+                target_description=description,
+            )
+            pentest_handler.start_conversation()  # This may produce print() output
+
+            print("=== MallanooSploit Finished ===")
+
+        # Now read what was printed line by line and emit
+        lines = buffer.getvalue().splitlines()
+        for line in lines:
+            socketio.emit(f"output_{command_id}", {"data": line})
+            socketio.sleep(0.05)  # small delay so the client sees streaming effect
+    except Exception as e:
+        socketio.emit(f"output_{command_id}", {"data": f"Error running MallanooSploit: {str(e)}"})
+
+
+@app.route("/api/scan", methods=["POST"])
+def scan():
+    """
+    Accepts JSON with {"ip": "..."} and starts two parallel threads:
+      1) A shell command (ping)
+      2) MallanooSploit logic
+    Both outputs are streamed to the client via Socket.IO
     """
     data = request.json or {}
     ip = data.get("ip")
-    desc = data.get("description", "No description provided.")
-
     if not ip:
         return {"error": "IP address is required"}, 400
 
-    # We'll run the pentest in a background task so we don't block the Flask worker
-    def background_pentest():
-        # Use StringIO to capture printed output from run_pentest()
-        buffer = io.StringIO()
-        with redirect_stdout(buffer):
-            run_pentest(ip, desc)
-        # Once run_pentest() finishes, buffer has everything printed
-        lines = buffer.getvalue().splitlines()
+    # Example shell commands (you can modify them as desired)
+    # We'll just do ping here. The second is replaced by MallanooSploit.
+    command1 = f"ping {ip} -c 4"
 
-        # Stream each line to the frontend
-        for line in lines:
-            socketio.emit("pentest_output", {"data": line})
-            socketio.sleep(0.05)  # short sleep so client sees real-time updates
+    # Start both commands in parallel
+    #  - We'll re-use your existing socketio channels: output_1 and output_2
+    threading.Thread(target=run_shell_command, args=(command1, 1)).start()
+    threading.Thread(target=run_mallanoo_sploit, args=(ip, 2, "Demo target")).start()
 
-    # Kick off the background task
-    socketio.start_background_task(background_pentest)
+    return {"message": "Scan started"}
 
-    return {"message": "Pentest started"}
 
 if __name__ == "__main__":
-    # Run Flask-SocketIO
-    socketio.run(app, host="0.0.0.0", port=5000)
+    socketio.run(app, host="0.0.0.0", port=5500)
