@@ -1,64 +1,51 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { io } from "socket.io-client";
 import { motion } from "framer-motion";
 
 export default function CyberApp() {
   const [ipAddress, setIpAddress] = useState("");
-  const [output, setOutput] = useState("");
+  const [output1, setOutput1] = useState("");
+  const [output2, setOutput2] = useState("");
   const [status, setStatus] = useState("Idle");
 
-  // const handleFire = async () => {
-  //   setStatus("Running");
-  //   setOutput("");
+  useEffect(() => {
+    const socket = io("http://192.168.5.107:5000");
 
-  //   // const eventSource = new EventSource(`/api/scan?ip=${ipAddress}`);
-  //   // const eventSource = new EventSource(`http://192.168.1.46:5000/api/scan?ip=${ipAddress}`);
-  //   const eventSource = new EventSource(`http://192.168.1.46:5000/api/scan?ip='192.168.251.190'`);
+    // Listen for the first command's output
+    socket.on("output_1", (data) => {
+      setOutput1((prev) => prev + data.data + "\n");
+    });
 
+    // Listen for the second command's output
+    socket.on("output_2", (data) => {
+      setOutput2((prev) => prev + data.data + "\n");
+    });
 
-  //   eventSource.onmessage = (event) => {
-  //     setOutput((prev) => prev + event.data + "\n");
-  //   };
-
-  //   eventSource.onerror = () => {
-  //     setStatus("Error");
-  //     eventSource.close();
-  //   };
-
-  //   eventSource.onopen = () => setStatus("Processing");
-
-  //   eventSource.onclose = () => setStatus("Completed");
-  // };
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
 
   const handleFire = async () => {
-    console.log("Fire button clicked"); // Log to the console when the button is clicked
     setStatus("Running");
-    setOutput("Initializing scan...\n"); // Add an initial message to the output
-  
-    const eventSource = new EventSource(`http://192.168.172.149:5000/api/scan?ip=${ipAddress}`);
-  
-    eventSource.onmessage = (event) => {
-      console.log("Received data:", event.data); // Log received data
-      setOutput((prev) => prev + event.data + "\n");
-    };
-  
-    eventSource.onerror = () => {
-      console.error("EventSource failed"); // Log any errors
-      setStatus("Error");
-      setOutput((prev) => prev + "Error: Connection failed.\n"); // Add an error message to the output
-      eventSource.close();
-    };
-  
-    eventSource.onopen = () => {
-      console.log("EventSource connection opened"); // Log when the connection is opened
+    setOutput1("");
+    setOutput2("");
+
+    const response = await fetch("http://192.168.5.107:5000/api/scan", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ip: ipAddress }),
+    });
+
+    if (response.ok) {
       setStatus("Processing");
-    };
-  
-    eventSource.onclose = () => {
-      console.log("EventSource connection closed"); // Log when the connection is closed
-      setStatus("Completed");
-    };
+    } else {
+      setStatus("Error");
+    }
   };
 
   return (
@@ -73,7 +60,6 @@ export default function CyberApp() {
       </header>
 
       <main className="flex-grow flex flex-col items-center justify-center relative p-6">
-        {/* MallanooSploit Title */}
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -83,8 +69,7 @@ export default function CyberApp() {
           MallanooSploit
         </motion.div>
 
-        {/* IP Input and Output Box */}
-        <div className="w-full max-w-3xl p-6 bg-gray-800 rounded-2xl shadow-lg">
+        <div className="w-full max-w-7xl p-6 bg-gray-800 rounded-2xl shadow-lg">
           <h2 className="text-xl font-bold mb-4">Enter Target IP Address</h2>
           <div className="flex gap-4 mb-6">
             <input
@@ -101,9 +86,16 @@ export default function CyberApp() {
               Fire
             </button>
           </div>
-          <pre className="bg-black text-green-400 p-4 rounded-lg h-64 overflow-auto border border-gray-600">
-            {output || "Awaiting output..."}
-          </pre>
+
+          {/* Wider Output Grid */}
+          <div className="grid grid-cols-2 gap-6">
+            <pre className="bg-black text-green-400 p-6 rounded-lg h-80 overflow-auto border border-gray-600">
+              {output1 || "Awaiting output..."}
+            </pre>
+            <pre className="bg-black text-green-400 p-6 rounded-lg h-80 overflow-auto border border-gray-600">
+              {output2 || "Awaiting output..."}
+            </pre>
+          </div>
         </div>
       </main>
 

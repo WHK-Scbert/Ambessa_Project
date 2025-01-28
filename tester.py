@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify
 import openai
 import os
 from prompts.prompt_class import PentestGPTPrompt
-from ambessa2 import SimplifiedPentestGPT
+from mallanoo_sploit import MallanooSploit
 
 
 # Initialize OpenAI API key (set this as an environment variable)
@@ -33,7 +33,7 @@ def run_pentest(target_ip, target_description):
     if not sessions["initialized"]:
         # Initialize the conversation with the user input
         sessions["initialized"] = True
-        pentest_handler = SimplifiedPentestGPT(
+        pentest_handler = MallanooSploit(
             target_ip=target_ip,
             target_description=target_description,
         )
