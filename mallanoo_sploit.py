@@ -1,8 +1,9 @@
+import os
+import re
 import subprocess
 import time
 import json
-import os
-import re
+import shutil
 from rich.console import Console
 from pentestgpt.utils.chatgpt import ChatGPT
 from pentestgpt.config.chat_config import ChatGPTConfig
@@ -62,36 +63,75 @@ class MallanooSploit:
             self.console.print(f"Error while communicating with GPT: {str(e)}", style="bold red")
             raise e
 
-    def execute_command(self, command):
-        """
-        Executes a command using subprocess and captures the output.
-        """
-        try:
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            stdout, stderr = process.communicate()
-            if process.returncode != 0:
-                self.console.print(f"Command failed with error: {stderr}", style="bold red")
-            return stdout, stderr
-        except Exception as e:
-            self.console.print(f"Error executing command: {str(e)}", style="bold red")
-            return None, None
-
     def validate_command(self, command):
         """
-        Validate and adjust commands for safety and usability.
+        Validate a command for safety and usability.
+        """
+        if not command or not isinstance(command, list):
+            return False, "Invalid command format."
+
+        # Check if the command exists on the system
+        if shutil.which(command[0]) is None:
+            return False, f"Command not found: {command[0]}"
+
+        return True, "Command is valid."
+
+    def command_simplified(self, command):
+        """
+        Simplify commands to avoid potential errors or infinite loops.
         """
         if not command or not isinstance(command, list):
             return command
-        if command[0] == "ping" and "-c" not in command:
-            command.extend(["-c", "4"])
+
+        # Replace `nmap` with `cat` if nmap results exist
+        if command[0] == "nmap":
+            existing_files = [f for f in os.listdir(".") if "nmap" in f and f.endswith(".txt")]
+            if existing_files:
+                self.console.print(f"[bold yellow]Found existing nmap result: {existing_files[0]}[/bold yellow]")
+                return ["cat", existing_files[0]]
+
+        # Ensure `ping` includes `-c 6`
+        if command[0] == "ping":
+            if "-c" not in command:
+                command.extend(["-c", "6"])
+
+        # Ensure `tail` includes `-n 100` to limit output
+        if command[0] == "tail":
+            if "-n" not in command:
+                command.extend(["-n", "100"])
+
+        # Ensure `watch` includes `-n 2` to set a safe refresh interval
+        if command[0] == "watch":
+            if "-n" not in command:
+                command.extend(["-n", "2"])
+
+        # Add `timeout` to `yes` to prevent infinite loops
+        if command[0] == "yes":
+            return ["timeout", "5s"] + command
+
+        # Default to returning the command unmodified
         return command
 
-    def is_bruteforce_command(self, command):
+
+    def execute_command_in_new_window(self, command):
         """
-        Check if a command is related to brute force operations.
+        Execute a command in a new terminal window to display results in real time.
         """
-        brute_keywords = ["hydra", "medusa", "brute", "bruteforce"]
-        return any(keyword in command for keyword in brute_keywords)
+        try:
+            # Simplify the command before execution
+            command = self.command_simplified(command)
+
+            self.console.print(f"[bold blue]About to execute command: {' '.join(command)}[/bold blue]")
+
+            # Spawn a new terminal window for the command
+            terminal_command = ["x-terminal-emulator", "-e"] + command  # Adjust for your terminal
+            process = subprocess.Popen(terminal_command)
+            process.wait()
+
+        except FileNotFoundError:
+            self.console.print("[bold red]Error: Terminal emulator not found. Install x-terminal-emulator or adjust the terminal command.[/bold red]")
+        except Exception as e:
+            self.console.print(f"Error executing command in new window: {str(e)}", style="bold red")
 
     def start_conversation(self):
         """
@@ -112,25 +152,22 @@ class MallanooSploit:
 
                 if not commands:
                     self.console.print("No valid command found in response.", style="bold yellow")
-                    response = self.send_to_gpt("No valid command. Suggest next steps.")
+                    response = self.send_to_gpt(self.prompts.ask_todo)
                     continue
 
-                command = self.validate_command(commands[0].split())
-                if self.is_bruteforce_command(command):
-                    self.console.print("Executing brute force command...", style="bold yellow")
-                    brute_stdout, brute_stderr = self.execute_command(command)
-                    self.console.print(f"Brute Force Output: {brute_stdout}", style="bold green")
-                    response = self.send_to_gpt("Brute force completed. Suggest next steps.")
+                command = commands[0].strip().split()
+                is_valid, validation_message = self.validate_command(command)
+                if not is_valid:
+                    self.console.print(f"[bold red]Command validation failed: {validation_message}[/bold red]")
+                    response = self.send_to_gpt(f"Command validation failed: {validation_message}. Suggest next steps.")
                     continue
 
-                stdout, stderr = self.execute_command(command)
-                result_summary = (
-                    f"{self.prompts.process_results}\n"
-                    f"Command: {command}\n"
-                    f"Output:\n{stdout or 'No output.'}\n"
-                    f"Error:\n{stderr or 'No error.'}\n"
-                )
+                self.execute_command_in_new_window(command)
+
+                # Send command results to GPT (placeholder example)
+                result_summary = f"{self.prompts.process_results}\nCommand: {' '.join(command)}\nOutput: Executed in a separate window.\n"
                 response = self.send_to_gpt(result_summary)
+
             except KeyboardInterrupt:
                 self.console.print("Interrupted by user. Exiting.", style="bold red")
                 break
