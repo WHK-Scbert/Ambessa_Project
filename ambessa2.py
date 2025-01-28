@@ -4,7 +4,7 @@ import json
 import os
 from rich.console import Console
 from rich.spinner import Spinner
-from pentestgpt.utils.chatgpt import ChatGPT
+from pentestgpt.utils.old_chatgpt import ChatGPT
 from pentestgpt.config.chat_config import ChatGPTConfig
 from prompts.prompt_class_v2 import PentestGPTPrompt  # Import the prompt class
 from pentestgpt.utils.APIs.module_import import dynamic_import
