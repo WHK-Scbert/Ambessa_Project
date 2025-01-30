@@ -1,5 +1,5 @@
 {
-    "name": "MallanooSploit - Updated",
+    "name": "My workflow 2",
     "nodes": [
       {
         "parameters": {
@@ -10,10 +10,10 @@
         "name": "Webhook Trigger",
         "type": "n8n-nodes-base.webhook",
         "position": [
-          -1840,
-          260
+          -1540,
+          140
         ],
-        "id": "9f08ecf1-64dd-449b-8986-f76af3c0fd84",
+        "id": "305a1426-df8e-4b6d-8e4f-0138316bd4af",
         "typeVersion": 2,
         "webhookId": "6558cf98-e229-4a76-858b-dab8405e852c"
       },
@@ -24,24 +24,24 @@
         "name": "Ping Target",
         "type": "n8n-nodes-base.executeCommand",
         "position": [
-          -1720,
-          260
+          -1420,
+          140
         ],
-        "id": "b2187a1a-c650-49a4-87cf-36beb80b50d9",
+        "id": "906ce16a-e67e-4f0b-9c8d-28847c0fe3be",
         "typeVersion": 1,
         "onError": "continueRegularOutput"
       },
       {
         "parameters": {
-          "command": "enum4linux -a {{$json[\"query\"].target_ip}}"
+          "command": "=enum4linux -a {{ $('Webhook Trigger').item.json.body.target_ip }}"
         },
         "name": "Run Enum4Linux",
         "type": "n8n-nodes-base.executeCommand",
         "position": [
-          -360,
-          -60
+          -60,
+          -200
         ],
-        "id": "37fe7909-1b72-4267-9277-f52ae2ef72d5",
+        "id": "f81bb5b4-3bdc-4b0f-bdb5-3259daa319b7",
         "typeVersion": 1
       },
       {
@@ -51,10 +51,10 @@
         "name": "Run Nikto",
         "type": "n8n-nodes-base.executeCommand",
         "position": [
-          -220,
-          180
+          80,
+          60
         ],
-        "id": "147d4e58-4d2e-4370-8701-49802d3ccf84",
+        "id": "1eba1dab-f86d-4086-a327-1117268cea2e",
         "typeVersion": 1
       },
       {
@@ -64,10 +64,10 @@
         "name": "Run MagicRecon",
         "type": "n8n-nodes-base.executeCommand",
         "position": [
-          60,
-          180
+          360,
+          60
         ],
-        "id": "175bed89-1071-4128-9561-96b6003f543b",
+        "id": "0b26ab4f-d32e-464c-91f1-c96433cea579",
         "typeVersion": 1
       },
       {
@@ -77,10 +77,10 @@
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          -780,
-          500
+          -480,
+          380
         ],
-        "id": "58fce766-2ac4-4593-bd9f-7e85e39cf754",
+        "id": "5f61055c-7622-4229-b3eb-3e9250ba6a0d",
         "name": "Nmap"
       },
       {
@@ -90,10 +90,10 @@
         "name": "Run Metasploit Exploit",
         "type": "n8n-nodes-base.executeCommand",
         "position": [
-          420,
-          0
+          740,
+          -260
         ],
-        "id": "36dc6daf-03a5-4fcf-bf4f-7dbfc50c45b2",
+        "id": "edb9f577-c680-41c3-8a76-ab4e0e52af7d",
         "typeVersion": 1
       },
       {
@@ -108,7 +108,7 @@
             "conditions": [
               {
                 "id": "f755812c-b7c6-474b-892e-683583cd3c92",
-                "leftValue": "={{ $json.stdout }}",
+                "leftValue": "={{ $json.received.result }}",
                 "rightValue": "445/tcp",
                 "operator": {
                   "type": "string",
@@ -117,7 +117,7 @@
               },
               {
                 "id": "1858a3db-0cbb-4e00-b847-da78c42fa64c",
-                "leftValue": "={{ $json.stdout }}",
+                "leftValue": "={{ $json.received.result }}",
                 "rightValue": "135/tcp",
                 "operator": {
                   "type": "string",
@@ -134,10 +134,10 @@
         "type": "n8n-nodes-base.if",
         "typeVersion": 2.2,
         "position": [
-          -580,
-          0
+          -420,
+          -160
         ],
-        "id": "5f02a662-466d-49b7-a766-e8da3f252d3a",
+        "id": "d2dad254-7015-4634-b643-42ceae5c6169",
         "name": "SMBCheck"
       },
       {
@@ -168,10 +168,10 @@
         "type": "n8n-nodes-base.if",
         "typeVersion": 2.2,
         "position": [
-          -800,
-          180
+          -500,
+          60
         ],
-        "id": "345910d9-c81e-4cb6-b141-485f13821012",
+        "id": "884581fb-dc51-4b6b-b6aa-d4f22d2e3b6e",
         "name": "NmapCheck1"
       },
       {
@@ -181,10 +181,10 @@
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          -1360,
-          260
+          -1060,
+          140
         ],
-        "id": "649b79ba-414c-4a55-910f-b2e27f34c72a",
+        "id": "69a122aa-e9be-43e2-9716-568259e77005",
         "name": "NmapRead",
         "retryOnFail": false,
         "onError": "continueRegularOutput"
@@ -218,10 +218,10 @@
         "type": "n8n-nodes-base.if",
         "typeVersion": 2.2,
         "position": [
-          -440,
-          180
+          -140,
+          60
         ],
-        "id": "9a01c494-d067-4bb6-839b-a2d1fb6299a6",
+        "id": "0abfe605-e4e0-4c13-85db-13c48670391d",
         "name": "WebCheck"
       },
       {
@@ -231,10 +231,10 @@
         "type": "n8n-nodes-base.executeCommand",
         "typeVersion": 1,
         "position": [
-          -620,
-          500
+          -320,
+          380
         ],
-        "id": "16dc9d1c-5866-4c48-9932-c1f59a4efbc4",
+        "id": "72d7f459-b952-4b6e-bf8d-882ca6782a4a",
         "name": "NmapRead1"
       },
       {
@@ -252,31 +252,10 @@
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.2,
         "position": [
-          20,
-          -160
+          220,
+          60
         ],
-        "id": "ce054b96-2e00-4bf1-97c0-3e3c028141df",
-        "name": "HTTP Request - Enum4Linux Results"
-      },
-      {
-        "parameters": {
-          "method": "POST",
-          "url": "http://localhost:3000/api/send-scan",
-          "sendBody": true,
-          "bodyParameters": {
-            "parameters": [
-              {}
-            ]
-          },
-          "options": {}
-        },
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "position": [
-          -80,
-          180
-        ],
-        "id": "11601809-4063-44af-8f3f-ad4d1ab4ee41",
+        "id": "00068467-f108-4929-8b2f-f4b40ee149d4",
         "name": "HTTP Request - Nikto Results"
       },
       {
@@ -294,10 +273,10 @@
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.2,
         "position": [
-          200,
-          180
+          500,
+          60
         ],
-        "id": "2ac14ad2-20c9-4352-9fb0-b5b9f44158c2",
+        "id": "368151b0-0997-41cc-935f-f07efaa6681f",
         "name": "HTTP Request - MagicRecon Results"
       },
       {
@@ -318,10 +297,10 @@
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.2,
         "position": [
-          -1600,
-          260
+          -1300,
+          140
         ],
-        "id": "20ab0ea9-dfb4-4eeb-b545-08d59efee46a",
+        "id": "65d1fd3f-67d6-4ef0-8912-c75da09310e4",
         "name": "PingOutput"
       },
       {
@@ -342,10 +321,10 @@
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.2,
         "position": [
-          -440,
-          500
+          -140,
+          380
         ],
-        "id": "003cae1a-82db-4da0-8506-b48494077d7a",
+        "id": "f66d2b26-524d-4f04-85e8-1c4d0b9d6b69",
         "name": "NMAPOutput"
       },
       {
@@ -366,10 +345,10 @@
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.2,
         "position": [
-          -1120,
-          0
+          -820,
+          -120
         ],
-        "id": "b55b59bd-aa5a-486f-9709-8e89760c3891",
+        "id": "33ce03f2-a356-4af3-afc1-ad85c72cb470",
         "name": "NMAPOutput1"
       },
       {
@@ -379,10 +358,10 @@
         "type": "n8n-nodes-base.wait",
         "typeVersion": 1.1,
         "position": [
-          -1480,
-          260
+          -1180,
+          140
         ],
-        "id": "1c6e8bfb-13a1-4184-8326-33e163dde659",
+        "id": "8faf52d9-c9ab-4003-8956-276c63b24f3e",
         "name": "Wait",
         "webhookId": "70f9692a-13b1-4752-913c-7d28ff4d6456"
       },
@@ -393,10 +372,10 @@
         "type": "n8n-nodes-base.wait",
         "typeVersion": 1.1,
         "position": [
-          -960,
-          180
+          -660,
+          60
         ],
-        "id": "692ce3f4-4691-4f76-b108-09a47ad42e12",
+        "id": "2916f52e-8ed2-4828-9db5-fc85d6203991",
         "name": "Wait1",
         "webhookId": "70f9692a-13b1-4752-913c-7d28ff4d6456"
       },
@@ -421,16 +400,17 @@
               }
             ],
             "combinator": "and"
-          }
+          },
+          "options": {}
         },
         "name": "FTPCheck",
         "type": "n8n-nodes-base.if",
         "typeVersion": 2.2,
         "position": [
-          -700,
-          780
+          -400,
+          660
         ],
-        "id": "7f2f4c96-cc47-42a2-b5b2-d23f5b2de911"
+        "id": "c5221937-3f07-4ef7-afe3-4201a888c50d"
       },
       {
         "parameters": {
@@ -439,10 +419,10 @@
         "name": "Run FTP-Anonymous",
         "type": "n8n-nodes-base.executeCommand",
         "position": [
-          -500,
-          780
+          -200,
+          660
         ],
-        "id": "cd6c8d24-6d61-4109-8682-2f612907cd17",
+        "id": "88a0ffbc-4559-4b93-9db0-8540cc98a9f1",
         "typeVersion": 1
       },
       {
@@ -457,16 +437,17 @@
                 "value": "={{ $json.stdout }}"
               }
             ]
-          }
+          },
+          "options": {}
         },
         "name": "HTTP Request - FTPAnon Results",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.2,
         "position": [
-          -300,
-          780
+          0,
+          660
         ],
-        "id": "16f62663-7b55-45f4-8ace-9feaa883e5b4"
+        "id": "10ede5aa-ccba-472b-8dd9-756dd966ce37"
       },
       {
         "parameters": {
@@ -489,16 +470,17 @@
               }
             ],
             "combinator": "and"
-          }
+          },
+          "options": {}
         },
         "name": "SSLCheck",
         "type": "n8n-nodes-base.if",
         "typeVersion": 2.2,
         "position": [
-          -700,
-          980
+          -400,
+          860
         ],
-        "id": "f639bab8-2dfb-4501-88d4-9a3e92807ada"
+        "id": "307d5807-71c6-423d-9ec5-f9859bb3af32"
       },
       {
         "parameters": {
@@ -507,10 +489,10 @@
         "name": "Run SSLScan",
         "type": "n8n-nodes-base.executeCommand",
         "position": [
-          -500,
-          980
+          -200,
+          860
         ],
-        "id": "b24b5748-70df-4bdb-96f6-55fd3971301f",
+        "id": "a2ffae3b-db30-45e9-86f7-80e5b572514e",
         "typeVersion": 1
       },
       {
@@ -525,16 +507,17 @@
                 "value": "={{ $json.stdout }}"
               }
             ]
-          }
+          },
+          "options": {}
         },
         "name": "HTTP Request - SSLScan Results",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.2,
         "position": [
-          -300,
-          980
+          0,
+          860
         ],
-        "id": "e5311284-422d-4e53-bc62-151e0ac4641c"
+        "id": "88dcc184-1420-4a54-8732-49b00fe57073"
       },
       {
         "parameters": {
@@ -557,16 +540,17 @@
               }
             ],
             "combinator": "and"
-          }
+          },
+          "options": {}
         },
         "name": "MySQLCheck",
         "type": "n8n-nodes-base.if",
         "typeVersion": 2.2,
         "position": [
-          -700,
-          1180
+          -400,
+          1060
         ],
-        "id": "d4acc991-2113-46b3-a06f-00b3414ec978"
+        "id": "1c8c0a57-2350-4bff-818a-501cf93172f5"
       },
       {
         "parameters": {
@@ -575,10 +559,10 @@
         "name": "Run MySQLNmap",
         "type": "n8n-nodes-base.executeCommand",
         "position": [
-          -500,
-          1180
+          -200,
+          1060
         ],
-        "id": "20c45198-54a6-4644-ae22-11a45a0c5bac",
+        "id": "e902a9bb-960f-4d12-beb5-2687a81116c4",
         "typeVersion": 1
       },
       {
@@ -593,18 +577,141 @@
                 "value": "={{ $json.stdout }}"
               }
             ]
-          }
+          },
+          "options": {}
         },
         "name": "HTTP Request - MySQLNmap Results",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.2,
         "position": [
-          -300,
-          1180
+          0,
+          1060
         ],
-        "id": "74d41234-7d30-481c-a4e4-f1dc7cf66c25"
+        "id": "9201ed4f-a1eb-460e-9ac2-7768479bc3f8"
+      },
+      {
+        "parameters": {
+          "command": "cat /home/kali/Mallanoo_Agent/enum4linux_result.txt"
+        },
+        "type": "n8n-nodes-base.executeCommand",
+        "typeVersion": 1,
+        "position": [
+          -280,
+          -400
+        ],
+        "id": "88e7d5b0-2304-4f50-bf82-1d486fb8d7e0",
+        "name": "Enum4Read",
+        "retryOnFail": false,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "d79b2bec-7d05-432e-97ce-9d690142c67c",
+                "leftValue": "={{ $json.stdout }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "exists",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          -60,
+          -480
+        ],
+        "id": "0c7956d6-fc04-401a-81d0-6184547f2513",
+        "name": "Enum4Check"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://localhost:3000/api/submit",
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "result",
+                "value": "={{ $json.stdout }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          200,
+          -380
+        ],
+        "id": "927ad15b-32d5-417e-961d-2c8927d9508a",
+        "name": "Enum4Output"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://localhost:3000/api/submit",
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "result",
+                "value": "=Vulnerability Found with Exploitation: Eternal Blue"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          400,
+          -360
+        ],
+        "id": "04e0148d-2928-4365-8f7f-36e71b120411",
+        "name": "VulnFound"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://localhost:3000/api/submit",
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "result",
+                "value": "={{ $json.stdout }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1000,
+          -260
+        ],
+        "id": "bc2a26cd-46b7-4691-a97a-22de5ffa5f27",
+        "name": "Exploit Result"
       }
     ],
+    "pinData": {},
     "connections": {
       "Webhook Trigger": {
         "main": [
@@ -679,21 +786,6 @@
               "node": "NmapCheck1",
               "type": "main",
               "index": 0
-            },
-            {
-              "node": "FTPCheck",
-              "type": "main",
-              "index": 1
-            },
-            {
-              "node": "SSLCheck",
-              "type": "main",
-              "index": 2
-            },
-            {
-              "node": "MySQLCheck",
-              "type": "main",
-              "index": 3
             }
           ]
         ]
@@ -720,7 +812,7 @@
         "main": [
           [
             {
-              "node": "Run Enum4Linux",
+              "node": "Enum4Read",
               "type": "main",
               "index": 0
             }
@@ -738,7 +830,7 @@
         "main": [
           [
             {
-              "node": "HTTP Request - Enum4Linux Results",
+              "node": "Enum4Read",
               "type": "main",
               "index": 0
             }
@@ -841,8 +933,7 @@
               "type": "main",
               "index": 0
             }
-          ],
-          []
+          ]
         ]
       },
       "Run FTP-Anonymous": {
@@ -864,8 +955,7 @@
               "type": "main",
               "index": 0
             }
-          ],
-          []
+          ]
         ]
       },
       "Run SSLScan": {
@@ -887,8 +977,7 @@
               "type": "main",
               "index": 0
             }
-          ],
-          []
+          ]
         ]
       },
       "Run MySQLNmap": {
@@ -901,18 +990,79 @@
             }
           ]
         ]
+      },
+      "Enum4Read": {
+        "main": [
+          [
+            {
+              "node": "Enum4Check",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Enum4Check": {
+        "main": [
+          [
+            {
+              "node": "Enum4Output",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Run Enum4Linux",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Enum4Output": {
+        "main": [
+          [
+            {
+              "node": "VulnFound",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "VulnFound": {
+        "main": [
+          [
+            {
+              "node": "Run Metasploit Exploit",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Run Metasploit Exploit": {
+        "main": [
+          [
+            {
+              "node": "Exploit Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       }
     },
     "active": false,
     "settings": {
       "executionOrder": "v1"
     },
-    "versionId": "fa7bf9d6-dbea-4c3e-9f36-04b174770967",
+    "versionId": "19e6b00f-f2a1-4fb8-bb20-ba7d7eb5142c",
     "meta": {
       "templateCredsSetupCompleted": true,
       "instanceId": "6965eed6430514894118c88706fa2afabaeca3708ee375316c9e218033edbd9b"
     },
-    "id": "UujIlf4keFMTeZUU",
+    "id": "K1Xq5mVTotY8N4K0",
     "tags": []
   }
-  
