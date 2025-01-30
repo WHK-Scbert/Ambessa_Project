@@ -1,0 +1,918 @@
+{
+    "name": "MallanooSploit - Updated",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "/trigger_scan",
+          "options": {}
+        },
+        "name": "Webhook Trigger",
+        "type": "n8n-nodes-base.webhook",
+        "position": [
+          -1840,
+          260
+        ],
+        "id": "9f08ecf1-64dd-449b-8986-f76af3c0fd84",
+        "typeVersion": 2,
+        "webhookId": "6558cf98-e229-4a76-858b-dab8405e852c"
+      },
+      {
+        "parameters": {
+          "command": "=ping -c 3  {{ $json.body.target_ip }}"
+        },
+        "name": "Ping Target",
+        "type": "n8n-nodes-base.executeCommand",
+        "position": [
+          -1720,
+          260
+        ],
+        "id": "b2187a1a-c650-49a4-87cf-36beb80b50d9",
+        "typeVersion": 1,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "command": "enum4linux -a {{$json[\"query\"].target_ip}}"
+        },
+        "name": "Run Enum4Linux",
+        "type": "n8n-nodes-base.executeCommand",
+        "position": [
+          -360,
+          -60
+        ],
+        "id": "37fe7909-1b72-4267-9277-f52ae2ef72d5",
+        "typeVersion": 1
+      },
+      {
+        "parameters": {
+          "command": "nikto -h {{$json[\"query\"].target_ip}}"
+        },
+        "name": "Run Nikto",
+        "type": "n8n-nodes-base.executeCommand",
+        "position": [
+          -220,
+          180
+        ],
+        "id": "147d4e58-4d2e-4370-8701-49802d3ccf84",
+        "typeVersion": 1
+      },
+      {
+        "parameters": {
+          "command": "magicrecon -d {{$json[\"query\"].target_ip}} -a"
+        },
+        "name": "Run MagicRecon",
+        "type": "n8n-nodes-base.executeCommand",
+        "position": [
+          60,
+          180
+        ],
+        "id": "175bed89-1071-4128-9561-96b6003f543b",
+        "typeVersion": 1
+      },
+      {
+        "parameters": {
+          "command": "=nmap {{ $('Webhook Trigger').item.json.body.target_ip }} -o /home/kali/Mallanoo_Agent/nmap_scan.txt "
+        },
+        "type": "n8n-nodes-base.executeCommand",
+        "typeVersion": 1,
+        "position": [
+          -780,
+          500
+        ],
+        "id": "58fce766-2ac4-4593-bd9f-7e85e39cf754",
+        "name": "Nmap"
+      },
+      {
+        "parameters": {
+          "command": "msfconsole -r generated_exploit.rc"
+        },
+        "name": "Run Metasploit Exploit",
+        "type": "n8n-nodes-base.executeCommand",
+        "position": [
+          420,
+          0
+        ],
+        "id": "36dc6daf-03a5-4fcf-bf4f-7dbfc50c45b2",
+        "typeVersion": 1
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": false,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "f755812c-b7c6-474b-892e-683583cd3c92",
+                "leftValue": "={{ $json.stdout }}",
+                "rightValue": "445/tcp",
+                "operator": {
+                  "type": "string",
+                  "operation": "contains"
+                }
+              },
+              {
+                "id": "1858a3db-0cbb-4e00-b847-da78c42fa64c",
+                "leftValue": "={{ $json.stdout }}",
+                "rightValue": "135/tcp",
+                "operator": {
+                  "type": "string",
+                  "operation": "contains"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {
+            "ignoreCase": true
+          }
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          -580,
+          0
+        ],
+        "id": "5f02a662-466d-49b7-a766-e8da3f252d3a",
+        "name": "SMBCheck"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "d79b2bec-7d05-432e-97ce-9d690142c67c",
+                "leftValue": "={{ $('NmapRead').item.json.stdout }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "exists",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          -800,
+          180
+        ],
+        "id": "345910d9-c81e-4cb6-b141-485f13821012",
+        "name": "NmapCheck1"
+      },
+      {
+        "parameters": {
+          "command": "cat /home/kali/Mallanoo_Agent/nmap_scan.txt"
+        },
+        "type": "n8n-nodes-base.executeCommand",
+        "typeVersion": 1,
+        "position": [
+          -1360,
+          260
+        ],
+        "id": "649b79ba-414c-4a55-910f-b2e27f34c72a",
+        "name": "NmapRead",
+        "retryOnFail": false,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": false,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "f755812c-b7c6-474b-892e-683583cd3c92",
+                "leftValue": "={{ $('NmapCheck1').item.json.stdout }}",
+                "rightValue": "80/tcp",
+                "operator": {
+                  "type": "string",
+                  "operation": "contains"
+                }
+              }
+            ],
+            "combinator": "or"
+          },
+          "options": {
+            "ignoreCase": true
+          }
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          -440,
+          180
+        ],
+        "id": "9a01c494-d067-4bb6-839b-a2d1fb6299a6",
+        "name": "WebCheck"
+      },
+      {
+        "parameters": {
+          "command": "cat /home/kali/Mallanoo_Agent/nmap_scan.txt"
+        },
+        "type": "n8n-nodes-base.executeCommand",
+        "typeVersion": 1,
+        "position": [
+          -620,
+          500
+        ],
+        "id": "16dc9d1c-5866-4c48-9932-c1f59a4efbc4",
+        "name": "NmapRead1"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://localhost:3000/api/send-scan",
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {}
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          20,
+          -160
+        ],
+        "id": "ce054b96-2e00-4bf1-97c0-3e3c028141df",
+        "name": "HTTP Request - Enum4Linux Results"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://localhost:3000/api/send-scan",
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {}
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -80,
+          180
+        ],
+        "id": "11601809-4063-44af-8f3f-ad4d1ab4ee41",
+        "name": "HTTP Request - Nikto Results"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://localhost:3000/api/send-scan",
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {}
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          200,
+          180
+        ],
+        "id": "2ac14ad2-20c9-4352-9fb0-b5b9f44158c2",
+        "name": "HTTP Request - MagicRecon Results"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://localhost:3000/api/submit",
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "result",
+                "value": "={{ $json.stdout }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -1600,
+          260
+        ],
+        "id": "20ab0ea9-dfb4-4eeb-b545-08d59efee46a",
+        "name": "PingOutput"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://localhost:3000/api/submit",
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "result",
+                "value": "={{ $json.stdout }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -440,
+          500
+        ],
+        "id": "003cae1a-82db-4da0-8506-b48494077d7a",
+        "name": "NMAPOutput"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://localhost:3000/api/submit",
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "result",
+                "value": "={{ $json.stdout }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -1120,
+          0
+        ],
+        "id": "b55b59bd-aa5a-486f-9709-8e89760c3891",
+        "name": "NMAPOutput1"
+      },
+      {
+        "parameters": {
+          "amount": 2
+        },
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1.1,
+        "position": [
+          -1480,
+          260
+        ],
+        "id": "1c6e8bfb-13a1-4184-8326-33e163dde659",
+        "name": "Wait",
+        "webhookId": "70f9692a-13b1-4752-913c-7d28ff4d6456"
+      },
+      {
+        "parameters": {
+          "amount": 2
+        },
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1.1,
+        "position": [
+          -960,
+          180
+        ],
+        "id": "692ce3f4-4691-4f76-b108-09a47ad42e12",
+        "name": "Wait1",
+        "webhookId": "70f9692a-13b1-4752-913c-7d28ff4d6456"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": false,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "abc-ftp-21",
+                "leftValue": "={{ $('NmapRead').item.json.stdout }}",
+                "rightValue": "21/tcp",
+                "operator": {
+                  "type": "string",
+                  "operation": "contains"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "name": "FTPCheck",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          -700,
+          780
+        ],
+        "id": "7f2f4c96-cc47-42a2-b5b2-d23f5b2de911"
+      },
+      {
+        "parameters": {
+          "command": "=nmap -p 21 --script ftp-anon {{ $('Webhook Trigger').item.json.body.target_ip }}"
+        },
+        "name": "Run FTP-Anonymous",
+        "type": "n8n-nodes-base.executeCommand",
+        "position": [
+          -500,
+          780
+        ],
+        "id": "cd6c8d24-6d61-4109-8682-2f612907cd17",
+        "typeVersion": 1
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://localhost:3000/api/send-scan",
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "FTPAnonResult",
+                "value": "={{ $json.stdout }}"
+              }
+            ]
+          }
+        },
+        "name": "HTTP Request - FTPAnon Results",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -300,
+          780
+        ],
+        "id": "16f62663-7b55-45f4-8ace-9feaa883e5b4"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": false,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "ssl-443",
+                "leftValue": "={{ $('NmapRead').item.json.stdout }}",
+                "rightValue": "443/tcp",
+                "operator": {
+                  "type": "string",
+                  "operation": "contains"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "name": "SSLCheck",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          -700,
+          980
+        ],
+        "id": "f639bab8-2dfb-4501-88d4-9a3e92807ada"
+      },
+      {
+        "parameters": {
+          "command": "=sslscan {{ $('Webhook Trigger').item.json.body.target_ip }}"
+        },
+        "name": "Run SSLScan",
+        "type": "n8n-nodes-base.executeCommand",
+        "position": [
+          -500,
+          980
+        ],
+        "id": "b24b5748-70df-4bdb-96f6-55fd3971301f",
+        "typeVersion": 1
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://localhost:3000/api/send-scan",
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "SSLScanResult",
+                "value": "={{ $json.stdout }}"
+              }
+            ]
+          }
+        },
+        "name": "HTTP Request - SSLScan Results",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -300,
+          980
+        ],
+        "id": "e5311284-422d-4e53-bc62-151e0ac4641c"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": false,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "mysql-3306",
+                "leftValue": "={{ $('NmapRead').item.json.stdout }}",
+                "rightValue": "3306/tcp",
+                "operator": {
+                  "type": "string",
+                  "operation": "contains"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "name": "MySQLCheck",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          -700,
+          1180
+        ],
+        "id": "d4acc991-2113-46b3-a06f-00b3414ec978"
+      },
+      {
+        "parameters": {
+          "command": "=nmap -p 3306 --script mysql-audit,mysql-empty-password,mysql-vuln-cve2012-2122 {{ $('Webhook Trigger').item.json.body.target_ip }}"
+        },
+        "name": "Run MySQLNmap",
+        "type": "n8n-nodes-base.executeCommand",
+        "position": [
+          -500,
+          1180
+        ],
+        "id": "20c45198-54a6-4644-ae22-11a45a0c5bac",
+        "typeVersion": 1
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://localhost:3000/api/send-scan",
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "MySQLResult",
+                "value": "={{ $json.stdout }}"
+              }
+            ]
+          }
+        },
+        "name": "HTTP Request - MySQLNmap Results",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -300,
+          1180
+        ],
+        "id": "74d41234-7d30-481c-a4e4-f1dc7cf66c25"
+      }
+    ],
+    "connections": {
+      "Webhook Trigger": {
+        "main": [
+          [
+            {
+              "node": "Ping Target",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ping Target": {
+        "main": [
+          [
+            {
+              "node": "PingOutput",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PingOutput": {
+        "main": [
+          [
+            {
+              "node": "Wait",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Wait": {
+        "main": [
+          [
+            {
+              "node": "NmapRead",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "NmapRead": {
+        "main": [
+          [
+            {
+              "node": "NMAPOutput1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "NMAPOutput1": {
+        "main": [
+          [
+            {
+              "node": "Wait1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Wait1": {
+        "main": [
+          [
+            {
+              "node": "NmapCheck1",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "FTPCheck",
+              "type": "main",
+              "index": 1
+            },
+            {
+              "node": "SSLCheck",
+              "type": "main",
+              "index": 2
+            },
+            {
+              "node": "MySQLCheck",
+              "type": "main",
+              "index": 3
+            }
+          ]
+        ]
+      },
+      "NmapCheck1": {
+        "main": [
+          [
+            {
+              "node": "SMBCheck",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Nmap",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "SMBCheck": {
+        "main": [
+          [
+            {
+              "node": "Run Enum4Linux",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "WebCheck",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Run Enum4Linux": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request - Enum4Linux Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "WebCheck": {
+        "main": [
+          [
+            {
+              "node": "Run Nikto",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Run Nikto": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request - Nikto Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request - Nikto Results": {
+        "main": [
+          [
+            {
+              "node": "Run MagicRecon",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Run MagicRecon": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request - MagicRecon Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request - MagicRecon Results": {
+        "main": [
+          [
+            {
+              "node": "Run Metasploit Exploit",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Nmap": {
+        "main": [
+          [
+            {
+              "node": "NmapRead1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "NmapRead1": {
+        "main": [
+          [
+            {
+              "node": "NMAPOutput",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "NMAPOutput": {
+        "main": [
+          [
+            {
+              "node": "Wait1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "FTPCheck": {
+        "main": [
+          [
+            {
+              "node": "Run FTP-Anonymous",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          []
+        ]
+      },
+      "Run FTP-Anonymous": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request - FTPAnon Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "SSLCheck": {
+        "main": [
+          [
+            {
+              "node": "Run SSLScan",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          []
+        ]
+      },
+      "Run SSLScan": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request - SSLScan Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "MySQLCheck": {
+        "main": [
+          [
+            {
+              "node": "Run MySQLNmap",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          []
+        ]
+      },
+      "Run MySQLNmap": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request - MySQLNmap Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "active": false,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "versionId": "fa7bf9d6-dbea-4c3e-9f36-04b174770967",
+    "meta": {
+      "templateCredsSetupCompleted": true,
+      "instanceId": "6965eed6430514894118c88706fa2afabaeca3708ee375316c9e218033edbd9b"
+    },
+    "id": "UujIlf4keFMTeZUU",
+    "tags": []
+  }
+  
