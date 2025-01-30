@@ -1,46 +1,38 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { io } from "socket.io-client";
 import { motion } from "framer-motion";
 
 export default function CyberApp() {
   const [ipAddress, setIpAddress] = useState("");
-  const [output1, setOutput1] = useState("");
-  const [output2, setOutput2] = useState("");
+  const [output, setOutput] = useState("");
   const [status, setStatus] = useState("Idle");
 
   useEffect(() => {
-    const socket = io("http://localhost:5500");
+    const socket = new WebSocket("ws://localhost:5501");
 
-    // Listen for the first command's output
-    socket.on("output_1", (data) => {
-      setOutput1((prev) => prev + data.data + "\n");
-    });
-
-    // Listen for the second command's output
-    socket.on("output_2", (data) => {
-      setOutput2((prev) => prev + data.data + "\n");
-    });
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      setOutput((prev) => prev + `\n${data.output}`);
+    };
 
     return () => {
-      socket.disconnect();
+      socket.close();
     };
   }, []);
 
   const handleFire = async () => {
     setStatus("Running");
-    setOutput1("");
-    setOutput2("");
-
-    const response = await fetch("http://localhost:5500/api/scan", {
+    setOutput("");
+  
+    const response = await fetch("/api/send-scan", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ ip: ipAddress }),
+      body: JSON.stringify({ target_ip: ipAddress }),
     });
-
+  
     if (response.ok) {
       setStatus("Processing");
     } else {
@@ -88,12 +80,9 @@ export default function CyberApp() {
           </div>
 
           {/* Wider Output Grid */}
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6">
             <pre className="bg-black text-green-400 p-6 rounded-lg h-80 overflow-auto border border-gray-600">
-              {output1 || "Awaiting output..."}
-            </pre>
-            <pre className="bg-black text-green-400 p-6 rounded-lg h-80 overflow-auto border border-gray-600">
-              {output2 || "Awaiting output..."}
+              {output || "Awaiting output..."}
             </pre>
           </div>
         </div>
