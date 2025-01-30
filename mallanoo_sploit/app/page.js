@@ -1,30 +1,39 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 
 export default function CyberApp() {
   const [ipAddress, setIpAddress] = useState("");
-  const [output, setOutput] = useState("");
   const [status, setStatus] = useState("Idle");
+  const [output, setOutput] = useState("Awaiting output...");
 
-  useEffect(() => {
-    const socket = new WebSocket("ws://localhost:5501");
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const response = await fetch("/api/submit", { cache: "no-store" });
+                if (!response.ok) throw new Error("Failed to fetch output");
+                
+                const result = await response.json();
+                setOutput(result.result || "No output received yet.");
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                setOutput("Error fetching output.");
+            }
+        };
 
-    socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      setOutput((prev) => prev + `\n${data.output}`);
-    };
+        fetchData();
+        
+        // Poll every 5 seconds to get the latest output
+        const interval = setInterval(fetchData, 1000);
 
-    return () => {
-      socket.close();
-    };
-  }, []);
+        return () => clearInterval(interval);
+    }, []);
 
   const handleFire = async () => {
     setStatus("Running");
     setOutput("");
-  
+
     const response = await fetch("/api/send-scan", {
       method: "POST",
       headers: {
@@ -32,7 +41,7 @@ export default function CyberApp() {
       },
       body: JSON.stringify({ target_ip: ipAddress }),
     });
-  
+
     if (response.ok) {
       setStatus("Processing");
     } else {
@@ -82,7 +91,7 @@ export default function CyberApp() {
           {/* Wider Output Grid */}
           <div className="grid grid-cols-1 gap-6">
             <pre className="bg-black text-green-400 p-6 rounded-lg h-80 overflow-auto border border-gray-600">
-              {output || "Awaiting output..."}
+              {output}
             </pre>
           </div>
         </div>
