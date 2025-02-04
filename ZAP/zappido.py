@@ -1,9 +1,17 @@
 import time
 import argparse
+import os
 from zapv2 import ZAPv2
 
+def save_report(zap, phase):
+    os.makedirs("records", exist_ok=True)
+    report_path = f"records/zap_report_{phase}.html"
+    with open(report_path, "w") as report:
+        report.write(zap.core.htmlreport())
+    print(f"[INFO] Report saved as {report_path}")
+
 def zap_scan(target_url, port=80, run_attacks=False, auth_username=None, auth_password=None, login_url=None):
-    zap = ZAPv2(apikey='d1mebr1voiv8dqc67bkle24787')  # Replace with your ZAP API Key if necessary
+    zap = ZAPv2(apikey='your-zap-api-key')  # Replace with your ZAP API Key if necessary
     
     full_target_url = f"{target_url}:{port}"
     print(f"[INFO] Target: {full_target_url}")
@@ -28,6 +36,7 @@ def zap_scan(target_url, port=80, run_attacks=False, auth_username=None, auth_pa
         print(f"[INFO] Spider Scan Progress: {zap.spider.status(scan_id)}%")
         time.sleep(5)
     print("[INFO] Spider Scan completed.")
+    save_report(zap, "spider")
     
     print("[INFO] Starting Passive Scan...")
     time.sleep(5)
@@ -35,6 +44,7 @@ def zap_scan(target_url, port=80, run_attacks=False, auth_username=None, auth_pa
         print(f"[INFO] Passive Scan Progress: {zap.pscan.records_to_scan} records left to scan")
         time.sleep(5)
     print("[INFO] Passive Scan completed.")
+    save_report(zap, "passive")
     
     print("[INFO] Starting Active Scan...")
     scan_id = zap.ascan.scan(full_target_url)
@@ -49,6 +59,7 @@ def zap_scan(target_url, port=80, run_attacks=False, auth_username=None, auth_pa
     else:
         print("[ERROR] Active scan failed to start.")
     print("[INFO] Active Scan completed.")
+    save_report(zap, "active")
     
     if run_attacks:
         print("[INFO] Running attacks...")
@@ -58,11 +69,7 @@ def zap_scan(target_url, port=80, run_attacks=False, auth_username=None, auth_pa
             print("[INFO] Attack in progress...")
             time.sleep(5)
         print("[INFO] Attack completed.")
-    
-    print("[INFO] Exporting report...")
-    with open("zap_report.html", "w") as report:
-        report.write(zap.core.htmlreport())
-    print("[INFO] Report saved as zap_report.html")
+        save_report(zap, "attack")
     
     print("[INFO] Scan and attack process finished.")
     
