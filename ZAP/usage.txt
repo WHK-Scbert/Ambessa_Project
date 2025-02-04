@@ -1,0 +1,6 @@
+python zap_api_scanner.py http://example.com --port 8080 --run_attacks --auth_username admin --auth_password pass123 --login_url http://example.com/login
+
+pip install python-owasp-zap-v2.4
+
+
+python zappido.py http://10.10.10.95 --port 8080 --run_attacks --login_url http://10.10.10.95:8080/manager/status
