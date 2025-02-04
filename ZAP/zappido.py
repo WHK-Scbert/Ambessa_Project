@@ -1,14 +1,21 @@
 import time
 import argparse
 import os
+import json
 from zapv2 import ZAPv2
 
 def save_report(zap, phase):
     os.makedirs("records", exist_ok=True)
-    report_path = f"records/zap_report_{phase}.html"
-    with open(report_path, "w") as report:
+    report_path_html = f"records/zap_report_{phase}.html"
+    report_path_json = f"records/zap_report_{phase}.json"
+    
+    with open(report_path_html, "w") as report:
         report.write(zap.core.htmlreport())
-    print(f"[INFO] Report saved as {report_path}")
+    print(f"[INFO] Report saved as {report_path_html}")
+    
+    with open(report_path_json, "w") as report:
+        json.dump(zap.core.alerts(), report, indent=4)
+    print(f"[INFO] JSON Report saved as {report_path_json}")
 
 def zap_scan(target_url, port=80, run_attacks=False, auth_username=None, auth_password=None, login_url=None):
     zap = ZAPv2(apikey='your-zap-api-key')  # Replace with your ZAP API Key if necessary
